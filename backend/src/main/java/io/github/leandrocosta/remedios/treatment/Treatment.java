@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Tratamento de uma pessoa. Dose, via e instruções são transcrições da
@@ -78,6 +80,11 @@ public class Treatment extends PanacheEntityBase {
 
     @Column(name = "end_at")
     public Instant endAt;
+
+    /** Regra de agenda (ScheduleRule em JSON); obrigatória para ativar. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "schedule_rule")
+    public Map<String, Object> scheduleRule;
 
     /** Versão compartilhada; controlada pela aplicação, não pelo Hibernate. */
     @Column(nullable = false)

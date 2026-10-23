@@ -1,6 +1,7 @@
 package io.github.leandrocosta.remedios.common;
 
 import jakarta.ws.rs.core.Response.Status;
+import java.util.Map;
 
 /**
  * A versão-base informada pelo cliente não é a versão compartilhada atual.
@@ -13,7 +14,8 @@ public class VersionConflictException extends ApiException {
 
     public VersionConflictException(String what, long currentVersion) {
         super(Status.CONFLICT.getStatusCode(), "STALE_VERSION",
-                what + " foi alterado(a) por outro responsável. Revise a versão atual antes de salvar.");
+                what + " foi alterado(a) por outro responsável. Revise a versão atual antes de salvar.",
+                Map.of("currentVersion", currentVersion));
         this.currentVersion = currentVersion;
     }
 }

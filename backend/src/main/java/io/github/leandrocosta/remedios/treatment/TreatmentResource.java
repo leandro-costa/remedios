@@ -1,5 +1,6 @@
 package io.github.leandrocosta.remedios.treatment;
 
+import io.github.leandrocosta.remedios.schedule.ScheduleRule;
 import io.quarkus.security.Authenticated;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -23,11 +24,13 @@ public class TreatmentResource {
 
     public record TreatmentView(UUID id, UUID personId, String name, Treatment.Kind kind, String prescribedDose,
             String route, String instructions, Treatment.Status status, Instant startAt, Instant endAt,
-            long version, UUID createdBy, Instant createdAt, UUID updatedBy, Instant updatedAt) {
+            Map<String, Object> schedule, long version, UUID createdBy, Instant createdAt, UUID updatedBy,
+            Instant updatedAt) {
 
         static TreatmentView of(Treatment t) {
             return new TreatmentView(t.id, t.personId, t.name, t.kind, t.prescribedDose, t.route, t.instructions,
-                    t.status, t.startAt, t.endAt, t.version, t.createdBy, t.createdAt, t.updatedBy, t.updatedAt);
+                    t.status, t.startAt, t.endAt, t.scheduleRule, t.version, t.createdBy, t.createdAt, t.updatedBy,
+                    t.updatedAt);
         }
     }
 
@@ -48,11 +51,12 @@ public class TreatmentResource {
             @Size(max = 200) String route,
             @Size(max = 4000) String instructions,
             @NotNull Instant startAt,
-            Instant endAt) {
+            Instant endAt,
+            ScheduleRule schedule) {
 
         TreatmentService.TreatmentData toData() {
             return new TreatmentService.TreatmentData(name, kind, prescribedDose, route, instructions, startAt,
-                    endAt);
+                    endAt, schedule);
         }
     }
 
@@ -65,6 +69,7 @@ public class TreatmentResource {
             @Size(max = 4000) String instructions,
             @NotNull Instant startAt,
             Instant endAt,
+            ScheduleRule schedule,
             @NotNull Long baseVersion,
             @NotNull Instant effectiveFrom,
             @Size(max = 1000) String reason) {
@@ -107,7 +112,7 @@ public class TreatmentResource {
             @Valid @NotNull UpdateTreatment r) {
         Treatment t = treatments.update(familyId, treatmentId,
                 new TreatmentService.TreatmentData(r.name(), r.kind(), r.prescribedDose(), r.route(),
-                        r.instructions(), r.startAt(), r.endAt()),
+                        r.instructions(), r.startAt(), r.endAt(), r.schedule()),
                 new TreatmentService.Change(r.baseVersion(), r.effectiveFrom(), r.reason()));
         return TreatmentView.of(t);
     }

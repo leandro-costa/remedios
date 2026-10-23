@@ -59,6 +59,49 @@ distinguir os dois tipos de tratamento da seção 2.1.
 
 São parâmetros operacionais, não orientação clínica.
 
+## Agenda (Fase 2)
+
+- **Regra estruturada em vez de RRULE.** `DAILY`, `WEEKLY` e `INTERVAL`
+  (veja [`api.md`](api.md)) cobrem as prescrições comuns e são simples de validar. Uma
+  RRULE não expressa, por exemplo, 08:00 e 20:30 na mesma regra. A coluna
+  `recurrence_rule` da V1 foi substituída por `rule jsonb` na V2.
+- **Versões de agenda com vigência.** A regra desejada fica no tratamento
+  (versionada nas revisões). `treatment_schedule` guarda versões materializadas
+  com `valid_from`/`valid_until`. Sempre que a geração precisa recomeçar
+  (agenda, início ou término alterados, suspensão e reativação), a versão atual
+  é encerrada, as doses futuras em aberto são canceladas e outra versão começa.
+  Doses passadas continuam ligadas à versão que as gerou.
+- **Horizonte de 14 dias** (decisão em aberto 3), estendido por um job a cada
+  hora e idempotente (`UNIQUE(schedule_id, slot_key)` + `ON CONFLICT DO
+  NOTHING`). Configurável em `remedios.schedule.horizon`.
+- **Fuso e horário de verão** (decisão em aberto 6): horários de `DAILY` e
+  `WEEKLY` seguem o relógio local do `timezone` da agenda. Um horário
+  inexistente (relógio adiantado) passa para depois do salto; um ambíguo
+  (relógio atrasado) usa a primeira ocorrência. `INTERVAL` conta horas
+  corridas, independentes do relógio.
+- **`PENDING` e "atrasada" são calculados** na leitura. O banco guarda
+  `SCHEDULED` até haver desfecho, sem job para trocar estados.
+- **Ativação retroativa limitada a 24 h**, para registrar doses do mesmo dia
+  dadas antes do cadastro. Tratamentos ativos só mudam do presente em diante.
+- **Uso "se necessário" (sob demanda)** ainda não é suportado: toda dose
+  pertence a uma agenda.
+
+## Registro de doses (Fase 2)
+
+- **Antecedência máxima de 6 h** para registrar uma dose
+  (`remedios.administration.max-advance`), para evitar marcar a dose de outro
+  dia. Não há limite para registrar com atraso.
+- **Correção invalida e substitui.** Em vez de editar ou apagar,
+  `administration_record` ganha `voided_at`/`voided_by`/`void_reason`, e a
+  unicidade passa a valer só para o registro válido (índice parcial). O
+  histórico de uma dose mostra todos os registros.
+- **Registro online concorrente.** A linha da dose é bloqueada na transação, e
+  o segundo responsável recebe `409 ALREADY_ADMINISTERED` com quem registrou. O
+  conflito de registros offline (seção 10.3) é da Fase 3.
+- **Aparelhos.** O registro exige um aparelho ativo da conta, com id (UUID)
+  gerado no aparelho, já preparando a fila offline. Um aparelho desconectado
+  não volta com o mesmo id.
+
 ## Ocorrências duplicadas (seção 9.2)
 
 `dose_occurrence` tem `slot_key`, uma chave lógica gerada pela regra de

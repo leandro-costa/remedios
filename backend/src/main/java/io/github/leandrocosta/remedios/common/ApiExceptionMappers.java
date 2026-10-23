@@ -8,9 +8,7 @@ public class ApiExceptionMappers {
 
     @ServerExceptionMapper
     public Response map(ApiException e) {
-        Object body = e instanceof VersionConflictException vc
-                ? new ApiError(e.code, e.getMessage(), java.util.Map.of("currentVersion", vc.currentVersion))
-                : new ApiError(e.code, e.getMessage());
+        ApiError body = new ApiError(e.code, e.getMessage(), e.details);
         return Response.status(e.status).type(MediaType.APPLICATION_JSON).entity(body).build();
     }
 }
