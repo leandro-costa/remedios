@@ -17,11 +17,7 @@ export default defineConfig({
     locale: "pt-BR",
     trace: "retain-on-failure",
     serviceWorkers: "allow",
-    launchOptions: {
-      executablePath: process.env.PW_CHROMIUM_PATH || undefined,
-      // Service worker exige origem segura; no compose o app está em http://web.
-      args: process.env.E2E_BASE_URL ? [`--unsafely-treat-insecure-origin-as-secure=${process.env.E2E_BASE_URL}`] : [],
-    },
+    launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : undefined,
   },
   projects: [{ name: "celular", use: { ...devices["Pixel 7"] } }],
   webServer: process.env.E2E_BASE_URL

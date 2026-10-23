@@ -77,9 +77,12 @@ services:
     profiles: ["tools"]
     depends_on:
       - web
+    # Usa a rede do serviço web: o app abre em http://localhost, origem segura
+    # (exigida pelo service worker e pela Web Crypto).
+    network_mode: "service:web"
     working_dir: /src
     environment:
-      E2E_BASE_URL: http://web
+      E2E_BASE_URL: http://localhost
     command: ["sh", "-c", "npm ci --no-audit --no-fund --engine-strict=false && npx playwright test"]
     volumes:
       - ./frontend:/src
