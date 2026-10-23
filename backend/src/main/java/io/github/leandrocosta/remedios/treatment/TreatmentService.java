@@ -6,6 +6,8 @@ import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
 import io.github.leandrocosta.remedios.person.Person;
+import io.github.leandrocosta.remedios.schedule.ScheduleRule;
+import io.github.leandrocosta.remedios.schedule.ScheduleService;
 import io.github.leandrocosta.remedios.user.CurrentUser;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -30,9 +32,11 @@ public class TreatmentService {
 
     /** Tolerância para relógios de dispositivos ligeiramente atrasados. */
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
+    /** Ao ativar um rascunho, a agenda pode começar no máximo este tempo no passado. */
+    private static final Duration MAX_ACTIVATION_BACKDATE = Duration.ofHours(24);
 
     public record TreatmentData(String name, Treatment.Kind kind, String prescribedDose, String route,
-            String instructions, Instant startAt, Instant endAt) {
+            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule) {
     }
 
     public record Change(long baseVersion, Instant effectiveFrom, String reason) {
@@ -41,11 +45,14 @@ public class TreatmentService {
     private final CurrentUser currentUser;
     private final FamilyAccess access;
     private final AuditService audit;
+    private final ScheduleService schedules;
 
-    public TreatmentService(CurrentUser currentUser, FamilyAccess access, AuditService audit) {
+    public TreatmentService(CurrentUser currentUser, FamilyAccess access, AuditService audit,
+            ScheduleService schedules) {
         this.currentUser = currentUser;
         this.access = access;
         this.audit = audit;
+        this.schedules = schedules;
     }
 
     public List<Treatment> list(UUID familyId, UUID personId, Treatment.Status status) {
@@ -123,6 +130,15 @@ public class TreatmentService {
         if (sameContent(before, after)) {
             return t;
         }
+        if (t.status == Treatment.Status.ACTIVE) {
+            if (t.scheduleRule == null) {
+                throw scheduleRequired();
+            }
+            if (affectsSchedule(before, after)) {
+                // Só doses futuras em aberto são recalculadas; o passado fica como está.
+                restartSchedule(t, change, "Agenda alterada");
+            }
+        }
         return commitVersion(t, before, change, "TREATMENT_UPDATED");
     }
 
@@ -137,8 +153,18 @@ public class TreatmentService {
                     "Não é possível passar de " + t.status + " para " + target + ".");
         }
         requireEffectiveFrom(t, change);
+        if (target == Treatment.Status.ACTIVE && t.scheduleRule == null) {
+            throw scheduleRequired();
+        }
         Map<String, Object> before = snapshot(t);
+        Treatment.Status previous = t.status;
         t.status = target;
+        if (target == Treatment.Status.ACTIVE) {
+            schedules.start(t, change.effectiveFrom());
+        } else if (previous == Treatment.Status.ACTIVE) {
+            stopSchedule(t, change, target == Treatment.Status.SUSPENDED ? "Tratamento suspenso"
+                    : "Tratamento encerrado");
+        }
         return commitVersion(t, before, change, "TREATMENT_STATUS_CHANGED");
     }
 
@@ -154,12 +180,46 @@ public class TreatmentService {
         return t;
     }
 
-    /** Mudanças só valem do presente em diante; o passado registrado não é reescrito. */
+    /**
+     * Mudanças só valem do presente em diante; o passado registrado não é
+     * reescrito. Um rascunho pode ser ativado com início até 24 h no passado,
+     * para registrar doses do mesmo dia dadas antes do cadastro.
+     */
     private static void requireEffectiveFrom(Treatment t, Change change) {
-        if (t.status != Treatment.Status.DRAFT && change.effectiveFrom().isBefore(Instant.now().minus(CLOCK_SKEW))) {
+        Instant now = Instant.now();
+        if (t.status == Treatment.Status.DRAFT) {
+            if (change.effectiveFrom().isBefore(now.minus(MAX_ACTIVATION_BACKDATE))) {
+                throw ApiException.unprocessable("EFFECTIVE_FROM_IN_PAST",
+                        "A agenda pode começar no máximo 24 horas antes da ativação.");
+            }
+        } else if (change.effectiveFrom().isBefore(now.minus(CLOCK_SKEW))) {
             throw ApiException.unprocessable("EFFECTIVE_FROM_IN_PAST",
                     "A alteração de um tratamento já ativado não pode valer para o passado.");
         }
+    }
+
+    private void restartSchedule(Treatment t, Change change, String reason) {
+        stopSchedule(t, change, reason);
+        schedules.start(t, change.effectiveFrom());
+    }
+
+    private void stopSchedule(Treatment t, Change change, String reason) {
+        int cancelled = schedules.stop(t, change.effectiveFrom(), currentUser.id(), reason);
+        if (cancelled > 0) {
+            audit.record(t.familyId, currentUser.id(), TREATMENT, t.id, "OCCURRENCES_CANCELLED", null,
+                    Map.of("count", cancelled, "from", change.effectiveFrom().toString()), reason);
+        }
+    }
+
+    private static boolean affectsSchedule(Map<String, Object> before, Map<String, Object> after) {
+        return !Objects.equals(before.get("schedule"), after.get("schedule"))
+                || !Objects.equals(before.get("startAt"), after.get("startAt"))
+                || !Objects.equals(before.get("endAt"), after.get("endAt"));
+    }
+
+    private static ApiException scheduleRequired() {
+        return ApiException.unprocessable("SCHEDULE_REQUIRED",
+                "Defina a agenda (horários) antes de ativar o tratamento.");
     }
 
     private Treatment commitVersion(Treatment t, Map<String, Object> before, Change change, String eventType) {
@@ -197,7 +257,8 @@ public class TreatmentService {
         }
     }
 
-    private static void apply(Treatment t, TreatmentData data) {
+    private void apply(Treatment t, TreatmentData data) {
+        t.scheduleRule = data.schedule() == null ? null : schedules.toStored(data.schedule().normalized());
         t.name = Texts.clean(data.name());
         t.kind = data.kind();
         t.prescribedDose = Texts.clean(data.prescribedDose());
@@ -222,6 +283,7 @@ public class TreatmentService {
         m.put("status", t.status.name());
         m.put("startAt", t.startAt.toString());
         m.put("endAt", t.endAt == null ? null : t.endAt.toString());
+        m.put("schedule", t.scheduleRule);
         m.put("version", t.version);
         return m;
     }

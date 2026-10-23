@@ -61,9 +61,9 @@ class SchemaConstraintsTest {
                 VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s')
                 """, treatment, family, person, user, user);
         sql("""
-                INSERT INTO treatment_schedule (id, treatment_id, recurrence_rule, timezone,
-                    reminder_before_minutes, repeat_interval_minutes, repeat_limit, late_tolerance_minutes)
-                VALUES ('%s', '%s', 'FREQ=DAILY;BYHOUR=8', 'America/Bahia', 10, 15, 4, 30)
+                INSERT INTO treatment_schedule (id, treatment_id, rule, timezone, reminder_before_minutes,
+                    repeat_interval_minutes, repeat_limit, late_tolerance_minutes, version, valid_from)
+                VALUES ('%s', '%s', '{"type":"DAILY"}', 'America/Bahia', 10, 15, 4, 30, 1, now())
                 """, schedule, treatment);
         String occurrenceSql = """
                 INSERT INTO dose_occurrence (id, family_id, treatment_id, schedule_id, slot_key, scheduled_at,
@@ -82,9 +82,37 @@ class SchemaConstraintsTest {
                                                    administered_at, recorded_at)
                 VALUES ('%s', '%s', '%s', '%s', now(), now())
                 """;
-        sql(administrationSql, UUID.randomUUID(), occurrence, user, device);
+        UUID first = UUID.randomUUID();
+        sql(administrationSql, first, occurrence, user, device);
         assertThrows(PersistenceException.class,
                 () -> sql(administrationSql, UUID.randomUUID(), occurrence, user, device));
+
+        // Invalidado por correção, o registro continua guardado e libera um novo registro válido.
+        sql("UPDATE administration_record SET voided_at = now(), voided_by = '%s', void_reason = 'erro' WHERE id = '%s'",
+                user, first);
+        sql(administrationSql, UUID.randomUUID(), occurrence, user, device);
+    }
+
+    @Test
+    void onlyOneCurrentScheduleVersionPerTreatment() {
+        User ana = Api.newUser("Ana");
+        UUID user = ana.id();
+        UUID family = Api.createFamily(ana, "Família");
+        UUID person = UUID.randomUUID();
+        UUID treatment = UUID.randomUUID();
+        sql("INSERT INTO person (id, family_id, display_name) VALUES ('%s', '%s', 'Gabriel')", person, family);
+        sql("""
+                INSERT INTO treatment (id, family_id, person_id, name, kind, prescribed_dose, status, start_at,
+                                       version, created_by, updated_by)
+                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s')
+                """, treatment, family, person, user, user);
+        String scheduleSql = """
+                INSERT INTO treatment_schedule (id, treatment_id, rule, timezone, reminder_before_minutes,
+                    repeat_interval_minutes, repeat_limit, late_tolerance_minutes, version, valid_from)
+                VALUES ('%s', '%s', '{"type":"DAILY"}', 'UTC', 10, 15, 4, 30, %d, now())
+                """;
+        sql(scheduleSql, UUID.randomUUID(), treatment, 1);
+        assertThrows(PersistenceException.class, () -> sql(scheduleSql, UUID.randomUUID(), treatment, 2));
     }
 
     private static void sql(String template, Object... args) {

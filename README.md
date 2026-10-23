@@ -40,7 +40,13 @@ flowchart LR
   - [x] cadastro de pessoas (crianças sem conta, adultos com conta)
   - [x] cadastro de tratamentos com versões, revisões, auditoria e outbox
   - [x] padrões da família e preferências pessoais de notificação
-- [ ] **Fase 2 — Agenda**: recorrência, geração de ocorrências, administração, histórico
+- [x] **Fase 2 — Agenda** (API)
+  - [x] agenda diária, semanal ou a cada N horas, com fuso e horário de verão
+  - [x] geração das doses até o horizonte de 14 dias, recalculando só doses futuras
+  - [x] registro de administração, "não foi dada" e correções que preservam o original
+  - [x] agenda do período (tela Hoje), detalhe da dose com trilha e histórico com filtros
+  - [x] aparelhos da conta (origem de cada registro)
+  - [ ] telas Android (junto com o app, na Fase 3)
 - [ ] **Fase 3 — Offline**: Room, fila idempotente, sincronização incremental, conflitos
 - [ ] **Fase 4 — Notificações**: lembretes locais, publicador da outbox, push
 - [ ] **Fase 5 — Qualidade e segurança**
@@ -54,10 +60,12 @@ backend/                  API Quarkus (Dockerfile, mvnw)
   src/main/resources/db/migration/   migrações Flyway (fonte única do esquema)
   src/main/java/.../
     common/      erros da API
-    user/        conta local, preferências pessoais
+    user/        conta local, aparelhos, preferências pessoais
     family/      família, membros, convites, padrões, autorização
     person/      pessoas acompanhadas
     treatment/   tratamentos e revisões
+    schedule/    regra de agenda, versões e geração das doses
+    occurrence/  doses, administrações, correções e histórico
     audit/       auditoria e outbox
 scripts/                  utilitários (token para o modo local)
 docs/                     especificação, API, decisões e Firebase

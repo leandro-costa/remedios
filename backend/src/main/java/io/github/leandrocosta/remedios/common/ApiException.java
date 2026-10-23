@@ -1,6 +1,7 @@
 package io.github.leandrocosta.remedios.common;
 
 import jakarta.ws.rs.core.Response.Status;
+import java.util.Map;
 
 /**
  * Erro de negócio exposto pela API com um código estável, para que o
@@ -10,11 +11,18 @@ public class ApiException extends RuntimeException {
 
     public final int status;
     public final String code;
+    /** Dados adicionais para o cliente (ex.: versão atual, quem registrou). */
+    public final Map<String, Object> details;
 
     public ApiException(int status, String code, String message) {
+        this(status, code, message, null);
+    }
+
+    public ApiException(int status, String code, String message, Map<String, Object> details) {
         super(message);
         this.status = status;
         this.code = code;
+        this.details = details;
     }
 
     public static ApiException notFound(String what) {
@@ -27,6 +35,10 @@ public class ApiException extends RuntimeException {
 
     public static ApiException conflict(String code, String message) {
         return new ApiException(Status.CONFLICT.getStatusCode(), code, message);
+    }
+
+    public static ApiException conflict(String code, String message, Map<String, Object> details) {
+        return new ApiException(Status.CONFLICT.getStatusCode(), code, message, details);
     }
 
     public static ApiException unprocessable(String code, String message) {
