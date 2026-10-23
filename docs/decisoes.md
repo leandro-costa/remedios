@@ -3,12 +3,13 @@
 Escolhas feitas na Fase 1 para avançar sem bloquear as decisões em aberto da
 especificação (seção 15). Cada item pode ser revisto.
 
-## Autenticação (decisão em aberto 1)
+## Autenticação (decisão em aberto 1) — **decidida: Firebase Authentication**
 
-A API valida JWT RS256 de **qualquer** provedor OIDC (Keycloak, Auth0,
-Firebase Auth, Google…), configurado por emissor e chave/JWKS. A claim `sub`
-vira `app_user.auth_subject`, e a conta local é criada no primeiro acesso. A
-escolha do provedor fica em aberto sem afetar o domínio.
+O login é feito pelo Firebase Authentication. A API valida o ID token
+(assinatura RS256 com as chaves públicas do Google, emissor, audiência igual ao
+ID do projeto, validade), e o UID do Firebase vira `app_user.auth_subject`. Não
+é preciso credencial de serviço na API. Detalhes, configuração e limitações
+(revogação, LGPD) em [`firebase.md`](firebase.md).
 
 ## Convites (decisão em aberto 1)
 

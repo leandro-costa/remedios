@@ -1,8 +1,9 @@
 # API — Fase 1
 
-Todas as rotas exigem `Authorization: Bearer <jwt>`. A conta local é criada no
-primeiro acesso a partir da claim `sub` (nome inicial: `name`,
-`preferred_username` ou `email`).
+Todas as rotas exigem `Authorization: Bearer <ID token do Firebase>` (veja
+[`firebase.md`](firebase.md)). A conta local é criada no primeiro acesso a
+partir do UID do Firebase (claim `sub`); o nome inicial vem de `name` ou
+`email`. Sem token, ou com token inválido, a resposta é `401`.
 
 Rotas sob `/api/families/{familyId}` exigem participação **ativa** na família.
 Para quem não participa, a resposta é `404` — a API não revela se a família

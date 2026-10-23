@@ -36,10 +36,14 @@ services:
       REMEDIOS_DB_URL: jdbc:postgresql://postgres:5432/remedios
       REMEDIOS_DB_USER: ${POSTGRES_USER:-remedios}
       REMEDIOS_DB_PASSWORD: ${POSTGRES_PASSWORD:-remedios}
-      REMEDIOS_JWT_ISSUER: ${REMEDIOS_JWT_ISSUER:-https://remedios.local/dev}
-      REMEDIOS_JWT_PUBLICKEY_LOCATION: /run/keys/jwt-public.pem
+      # Firebase Authentication: obrigatório (veja docs/firebase.md).
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      # Chaves públicas do Google que assinam os ID tokens do Firebase.
+      # Modo local sem Firebase: troque por /run/keys/test-public.pem no .env
+      # e gere tokens com scripts/token-local.sh.
+      REMEDIOS_JWT_PUBLICKEY_LOCATION: ${REMEDIOS_JWT_PUBLICKEY_LOCATION:-https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com}
     volumes:
-      - ${REMEDIOS_JWT_PUBLICKEY_FILE:-./backend/src/test/resources/publicKey.pem}:/run/keys/jwt-public.pem:ro
+      - ./backend/src/test/resources/publicKey.pem:/run/keys/test-public.pem:ro
     ports:
       - "${API_PORT:-8080}:8080"
 

@@ -34,7 +34,7 @@ public class CurrentUser {
     }
 
     private String initialDisplayName() {
-        for (String claim : new String[] { "name", "preferred_username", "email" }) {
+        for (String claim : new String[] { "name", "email" }) {
             String value = Texts.clean(jwt.getClaim(claim));
             if (value != null) {
                 return value;

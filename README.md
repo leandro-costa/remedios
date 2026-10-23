@@ -10,6 +10,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 - Especificação completa: [`docs/especificacao.md`](docs/especificacao.md)
 - Referência da API: [`docs/api.md`](docs/api.md)
 - Decisões provisórias da implementação: [`docs/decisoes.md`](docs/decisoes.md)
+- Autenticação com Firebase: [`docs/firebase.md`](docs/firebase.md)
 
 ## Arquitetura
 
@@ -18,6 +19,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 | Aplicativo | Android — Kotlin, Jetpack Compose, Room, WorkManager | a fazer |
 | API | Java 27, Quarkus 3.40 REST | **Fase 1 implementada** |
 | Banco central | PostgreSQL 18, migrações Flyway | **esquema completo** |
+| Login | Firebase Authentication (Google, e-mail/senha) | **validação na API pronta** |
 | Eventos | transactional outbox → push (FCM) / tempo real | outbox gravada; publicador a fazer |
 
 ```mermaid
@@ -33,7 +35,7 @@ flowchart LR
 
 - [x] **Fase 1 — Fundação**
   - [x] esquema PostgreSQL completo (seção 9), com integridade reforçada no banco
-  - [x] autenticação por JWT e provisionamento da conta local
+  - [x] autenticação com Firebase Authentication e provisionamento da conta local
   - [x] família, membros, papéis e convites
   - [x] cadastro de pessoas (crianças sem conta, adultos com conta)
   - [x] cadastro de tratamentos com versões, revisões, auditoria e outbox
@@ -57,7 +59,8 @@ backend/                  API Quarkus (Dockerfile, mvnw)
     person/      pessoas acompanhadas
     treatment/   tratamentos e revisões
     audit/       auditoria e outbox
-docs/                     especificação, API e decisões
+scripts/                  utilitários (token para o modo local)
+docs/                     especificação, API, decisões e Firebase
 ```
 
 ## Versões
@@ -81,7 +84,7 @@ Todo o ambiente é organizado pelo `compose.yaml` da raiz. Só é preciso ter o
 Docker instalado.
 
 ```bash
-cp .env.example .env               # opcional: ajustar portas, senhas e chave JWT
+cp .env.example .env               # e preencha FIREBASE_PROJECT_ID
 
 docker compose up -d --build       # PostgreSQL + API em http://localhost:8080
 docker compose run --rm tests      # testes de integração do backend
@@ -111,18 +114,21 @@ cd backend
 Para outro banco de testes, defina `REMEDIOS_TEST_DB_URL`,
 `REMEDIOS_TEST_DB_USER` e `REMEDIOS_TEST_DB_PASSWORD`.
 
-### Autenticação
+### Autenticação (Firebase)
 
-A API aceita JWT assinado (RS256) de qualquer provedor OIDC; a claim `sub`
-identifica a conta. Em produção configure:
+O login é feito pelo **Firebase Authentication**. O app envia o ID token do
+Firebase e a API o valida com as chaves públicas do Google. Basta definir o ID
+do projeto no `.env`:
+
+```bash
+FIREBASE_PROJECT_ID=meu-projeto-firebase
+```
+
+Sem essa variável, a API não sobe. Para desenvolver sem um projeto Firebase,
+existe o modo local com tokens gerados por `scripts/token-local.sh`. O passo a
+passo completo está em [`docs/firebase.md`](docs/firebase.md).
 
 | Variável | Uso |
 | --- | --- |
-| `REMEDIOS_JWT_ISSUER` | emissor esperado (`iss`) |
-| `REMEDIOS_JWT_PUBLICKEY_LOCATION` | chave pública ou URL do JWKS do provedor |
-| `REMEDIOS_DB_URL`, `REMEDIOS_DB_USER`, `REMEDIOS_DB_PASSWORD` | PostgreSQL |
-
-No compose, a chave montada por padrão é a de **teste**, em
-`backend/src/test/resources`, e o mesmo vale para o modo dev e os testes. Ela
-nunca deve ser usada em produção; aponte `REMEDIOS_JWT_PUBLICKEY_FILE` no
-`.env` para a chave real.
+| `FIREBASE_PROJECT_ID` | ID do projeto Firebase (emissor e audiência dos tokens) |
+| `REMEDIOS_DB_URL`, `REMEDIOS_DB_USER`, `REMEDIOS_DB_PASSWORD` | PostgreSQL (definidas pelo compose) |
