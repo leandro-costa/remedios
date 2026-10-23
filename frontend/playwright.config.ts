@@ -19,7 +19,9 @@ export default defineConfig({
     serviceWorkers: "allow",
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : undefined,
   },
-  projects: [{ name: "celular", use: { ...devices["Pixel 7"] } }],
+  // Chromium completo (headless novo): o "headless shell" padrão sempre informa
+  // as notificações como bloqueadas, diferente do navegador do celular.
+  projects: [{ name: "celular", use: { ...devices["Pixel 7"], channel: "chromium" } }],
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : { command: "npm run build && npm run preview", url: baseURL, reuseExistingServer: true, timeout: 120_000,
