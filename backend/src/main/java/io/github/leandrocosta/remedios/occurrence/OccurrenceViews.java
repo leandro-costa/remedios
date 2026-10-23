@@ -45,7 +45,8 @@ public class OccurrenceViews {
      */
     public record OccurrenceView(UUID id, Instant scheduledAt, DoseOccurrence.Status status, boolean late,
             long version, PersonRef person, TreatmentRef treatment, AdministrationView administration,
-            String statusReason, UserRef statusChangedBy, Instant statusChangedAt) {
+            String statusReason, UserRef statusChangedBy, Instant statusChangedAt, UserRef claimedBy,
+            Instant claimedUntil) {
     }
 
     public record TrailEntry(String eventType, UserRef actor, Instant occurredAt, String reason,
@@ -77,9 +78,10 @@ public class OccurrenceViews {
         Map<UUID, AdministrationRecord> records = AdministrationRecord
                 .listValid(occurrences.stream().map(o -> o.id).toList()).stream()
                 .collect(Collectors.toMap(r -> r.doseOccurrenceId, Function.identity()));
-        Map<UUID, AppUser> users = users(Stream.concat(
+        Map<UUID, AppUser> users = users(Stream.of(
                 occurrences.stream().map(o -> o.statusChangedBy),
-                records.values().stream().map(r -> r.recordedBy)).toList());
+                occurrences.stream().map(o -> o.claimedBy),
+                records.values().stream().map(r -> r.recordedBy)).flatMap(x -> x).toList());
 
         return occurrences.stream().map(o -> {
             Treatment t = treatments.get(o.treatmentId);
@@ -94,7 +96,8 @@ public class OccurrenceViews {
                     new PersonRef(p.id, p.displayName),
                     new TreatmentRef(t.id, t.name, t.prescribedDose, t.route),
                     r == null ? null : administration(r, users),
-                    o.statusReason, ref(o.statusChangedBy, users), o.statusChangedAt);
+                    o.statusReason, ref(o.statusChangedBy, users), o.statusChangedAt,
+                    claimActive(o, now) ? ref(o.claimedBy, users) : null, claimActive(o, now) ? o.claimedUntil : null);
         }).toList();
     }
 
@@ -132,6 +135,10 @@ public class OccurrenceViews {
 
     private static Instant instant(Object value) {
         return value == null ? null : Instant.parse((String) value);
+    }
+
+    private static boolean claimActive(DoseOccurrence o, Instant now) {
+        return o.claimedBy != null && o.claimedUntil.isAfter(now);
     }
 
     private static AdministrationView administration(AdministrationRecord r, Map<UUID, AppUser> users) {

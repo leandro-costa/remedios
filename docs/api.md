@@ -205,6 +205,24 @@ antes). O registro anterior é **invalidado e preservado** (`voidedAt`,
 `voidedBy`, `voidReason`), e um novo registro é criado quando o resultado é uma
 administração. `OPEN` devolve a dose ao estado em aberto.
 
+## Notificações
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/push/config` | `{enabled, publicKey}`: chave VAPID para o navegador se inscrever |
+| PUT | `/api/me/devices/{d}/push` | `{endpoint, p256dh, auth, timezone}`: inscrição deste aparelho (HTTPS); substitui a anterior |
+| DELETE | `/api/me/devices/{d}/push` | desativa as notificações do aparelho |
+| POST | `/api/me/push/test` | envia um aviso de teste: `{sent, failed}` |
+| POST | `/api/families/{f}/occurrences/{o}/claim` | "estou cuidando desta dose" (20 min); `409 ALREADY_CLAIMED` se outra pessoa já está |
+| DELETE | `/api/families/{f}/occurrences/{o}/claim` | libera |
+| GET | `/api/families/{f}/persons/{p}/reminders` | lembretes avulsos pendentes |
+| POST | `/api/families/{f}/persons/{p}/reminders` | `{message, remindAt, notifyEveryone?}` (até 30 dias) |
+| DELETE | `/api/families/{f}/reminders/{id}` | cancela |
+
+As doses trazem `claimedBy` e `claimedUntil` enquanto alguém estiver cuidando.
+Sem chaves VAPID, as rotas de inscrição respondem `503 PUSH_NOT_CONFIGURED`.
+Funcionamento e preferências em [`notificacoes.md`](notificacoes.md).
+
 ## Saúde: aferições, sintomas e linhas de referência
 
 O sistema **guarda e mostra** os valores; não os interpreta, não diagnostica e

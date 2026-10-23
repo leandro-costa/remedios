@@ -63,6 +63,26 @@ app nativo (Capacitor) com notificações locais. Detalhes em
   tratamento suspeito ("possível reação"). Registrar uma reação não substitui
   avisar o profissional de saúde.
 
+## Notificações (fase 4)
+
+- **Web Push padrão com VAPID** em vez do Firebase Cloud Messaging: serve a
+  todos os navegadores (inclusive Safari no iPhone) sem SDK extra, e a cifra
+  RFC 8291 é implementada só com o JDK, conferida com o vetor oficial da RFC.
+- **Lembretes calculados a cada minuto**, a partir das doses em aberto e dos
+  parâmetros da agenda. Não há fila de lembretes futuros a manter em
+  sincronia com mudanças de tratamento. O envio é reservado em `reminder_log`
+  (idempotente entre instâncias).
+- **Só o lembrete mais recente vencido** é enviado, e nunca com mais de 15
+  minutos de atraso: depois de uma parada, o servidor não dispara avisos
+  acumulados.
+- **Substituição em vez de cancelamento:** o Web Push não permite apagar um
+  aviso remotamente sem mostrar outro, então o lembrete é trocado por "Dose
+  registrada" com a mesma `tag`, em silêncio.
+- **Privacidade por padrão:** avisos sem pessoa nem medicamento, a menos que o
+  responsável ligue "Mostrar pessoa e medicamento no aviso".
+- **Limite de repetições padrão: 4** (decisão em aberto 5, mantida como
+  provisória).
+
 ## Convites (decisão em aberto 1)
 
 Código aleatório de 24 bytes (base64url), uso único, validade de 7 dias, com

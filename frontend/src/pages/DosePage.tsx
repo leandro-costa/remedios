@@ -51,6 +51,7 @@ export function DosePage() {
         </Notice>
       )}
 
+      {open && !queued && <Claim occurrence={occurrence} onChange={() => void detail.reload()} />}
       {open && !queued && <RecordForm occurrence={occurrence} onDone={() => navigate("/")} />}
       {occurrence.administration && <RecordSummary detail={detail.data} occurrence={occurrence} />}
       {occurrence.status === "NOT_ADMINISTERED" && (
@@ -69,6 +70,36 @@ export function DosePage() {
         <Correction occurrence={occurrence} onDone={() => void detail.reload()} />
       )}
       {detail.data && <Trail detail={detail.data} />}
+    </div>
+  );
+}
+
+/** "Estou cuidando desta dose" (seção 6.3): reduz os lembretes dos outros; não é administração. */
+function Claim({ occurrence, onChange }: { occurrence: OccurrenceView; onChange: () => void }) {
+  const family = useFamily();
+  const { me } = useSession();
+  const online = useOnline();
+  const [error, setError] = useState<string | null>(null);
+  const mine = occurrence.claimedBy?.id === me?.id;
+  async function toggle() {
+    setError(null);
+    try {
+      await api(`/families/${family.id}/occurrences/${occurrence.id}/claim`, { method: mine ? "DELETE" : "POST" });
+      onChange();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+  if (occurrence.claimedBy && !mine) {
+    return <Notice>{occurrence.claimedBy.displayName} está cuidando desta dose até {formatTime(occurrence.claimedUntil!)}.</Notice>;
+  }
+  return (
+    <div className="stack">
+      {error && <Notice tone="error">{error}</Notice>}
+      <button className="btn" disabled={!online} onClick={() => void toggle()}>
+        {mine ? `Você está cuidando até ${formatTime(occurrence.claimedUntil!)} · liberar` : "Estou cuidando desta dose"}
+      </button>
+      {!mine && <p className="muted small">Avisa os outros responsáveis e silencia os lembretes deles por alguns minutos. Não registra a dose.</p>}
     </div>
   );
 }

@@ -12,6 +12,8 @@ async function measure(p: Page, type: string, values: string[], minutesAgo: numb
 }
 
 test("aferições com gráfico, referência, offline e sintomas", async ({ browser }) => {
+  // Horários fixados no início: evita a virada de minuto durante o teste.
+  const T_MINUS_75 = localTime(-75);
   const ana = await newUser(browser, `Ana S ${run}`);
   const p = ana.page;
   await p.getByLabel("Nome da família").fill(`Família S ${run}`);
@@ -27,17 +29,17 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Antitérmico");
   await p.getByLabel("Dose conforme a prescrição").fill("10 gotas");
-  await p.getByLabel("Horário 1", { exact: true }).fill(localTime(-75));
+  await p.getByLabel("Horário 1", { exact: true }).fill(T_MINUS_75);
   await p.getByRole("button", { name: "Conferir" }).click();
   await p.getByRole("button", { name: "Salvar" }).click();
   await p.getByRole("button", { name: "Ativar agenda" }).click();
   await p.getByRole("button", { name: "Confirmar" }).click();
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
   await p.getByRole("link", { name: "Hoje" }).click();
-  await p.getByRole("link", { name: new RegExp(localTime(-75)) }).click();
+  await p.getByRole("link", { name: new RegExp(T_MINUS_75) }).click();
   await p.getByLabel("Horário efetivo").fill(localDateTime(-70));
   await p.getByRole("button", { name: "Confirmar administração" }).click();
-  await expect(p.getByRole("link", { name: new RegExp(localTime(-75)) })).toContainText("Administrada");
+  await expect(p.getByRole("link", { name: new RegExp(T_MINUS_75) })).toContainText("Administrada");
 
   // Temperaturas
   await p.getByRole("link", { name: "Saúde" }).click();

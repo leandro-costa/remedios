@@ -166,6 +166,9 @@ export interface OccurrenceView {
   statusReason: string | null;
   statusChangedBy: UserRef | null;
   statusChangedAt: string | null;
+  /** "Estou cuidando desta dose", quando ativo. */
+  claimedBy: UserRef | null;
+  claimedUntil: string | null;
 }
 
 export interface TrailEntry {
@@ -261,4 +264,13 @@ export interface ReferenceLineView {
   value2: number | null;
   label: string;
   updatedAt: string;
+}
+
+export interface CustomReminderView {
+  id: string;
+  personId: string;
+  message: string;
+  remindAt: string;
+  notifyEveryone: boolean;
+  createdBy: string;
 }

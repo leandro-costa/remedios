@@ -9,6 +9,7 @@ import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { ROLE } from "../lib/labels";
 import { formatDate, formatWhen } from "../lib/time";
+import { disablePush, enablePush, pushState, testPush, type PushState } from "../sync/push";
 import { useFamily, useSession } from "../session";
 
 /** Família e configurações (seção 7.5). */
@@ -32,6 +33,7 @@ export function FamilyPage() {
       <Members isAdmin={isAdmin} />
       <Persons />
       <Defaults isAdmin={isAdmin} />
+      <PushSettings />
       <Preferences />
       <Devices />
       <section className="card stack">
@@ -270,26 +272,92 @@ function Preferences() {
   const { busy, error, run } = useAction();
   if (!prefs.data) return null;
   const p = prefs.data;
+  const save = (patch: Partial<NotificationSettings>) => void run(async () => {
+    await api("/me/notification-settings", { method: "PUT", body: { ...p, ...patch } });
+    await prefs.reload();
+  });
   const toggle = (key: keyof NotificationSettings, label: string) => (
     <label className="switch">
       <span>{label}</span>
-      <input type="checkbox" checked={Boolean(p[key])} disabled={busy}
-        onChange={(e) => void run(async () => {
-          await api("/me/notification-settings", { method: "PUT", body: { ...p, [key]: e.target.checked } });
-          await prefs.reload();
-        })} />
+      <input type="checkbox" checked={Boolean(p[key])} disabled={busy} onChange={(e) => save({ [key]: e.target.checked })} />
     </label>
   );
   return (
     <section className="card stack">
-      <h2>Suas preferências</h2>
-      <p className="muted small">Valem só para você. Os lembretes por notificação chegam na próxima versão do app.</p>
+      <h2>Suas preferências de aviso</h2>
+      <p className="muted small">Valem só para você e não mudam a agenda nem os horários dos tratamentos.</p>
       {error && <Notice tone="error">{error}</Notice>}
-      {toggle("earlyReminderEnabled", "Lembrete antecipado")}
+      {toggle("earlyReminderEnabled", "Lembrete antes do horário")}
+      <label>
+        Repetir lembrete de dose pendente
+        <select value={p.repeatIntervalMinutes ?? ""} disabled={busy}
+          onChange={(e) => save({ repeatIntervalMinutes: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">Como definido no tratamento</option>
+          {[5, 10, 15, 20, 30, 60].map((m) => <option key={m} value={m}>A cada {m} min</option>)}
+        </select>
+      </label>
       {toggle("soundEnabled", "Som")}
       {toggle("vibrationEnabled", "Vibração")}
       {toggle("confirmationNotifications", "Avisar a cada dose registrada por outro responsável")}
-      {toggle("lockScreenDetails", "Mostrar nome do medicamento na tela bloqueada")}
+      {toggle("lockScreenDetails", "Mostrar pessoa e medicamento no aviso (tela bloqueada)")}
+      {toggle("quietHoursEnabled", "Horário de silêncio")}
+      {p.quietHoursEnabled && (
+        <div className="row wrap">
+          <label>De <input type="time" value={p.quietHoursStart?.slice(0, 5) ?? ""} onChange={(e) => save({ quietHoursStart: e.target.value })} /></label>
+          <label>Até <input type="time" value={p.quietHoursEnd?.slice(0, 5) ?? ""} onChange={(e) => save({ quietHoursEnd: e.target.value })} /></label>
+        </div>
+      )}
+      {p.quietHoursEnabled && <p className="muted small">No horário de silêncio você não recebe lembretes de dose. Conflitos e lembretes que você mesmo criou continuam chegando.</p>}
+    </section>
+  );
+}
+
+/** Ativação das notificações neste aparelho (Web Push). */
+function PushSettings() {
+  const { deviceId } = useSession();
+  const online = useOnline();
+  const [state, setState] = useState<PushState | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const { busy, error, run } = useAction();
+  useEffect(() => { void pushState().then(setState); }, []);
+
+  const descriptions: Record<PushState, string> = {
+    unsupported: "Este navegador não recebe notificações. No Android, use o Chrome; no computador, Chrome, Edge ou Firefox.",
+    "install-required": "No iPhone, as notificações só funcionam com o app instalado: toque em Compartilhar → Adicionar à Tela de Início e abra o app por lá.",
+    "server-disabled": "O servidor ainda não foi configurado para enviar notificações.",
+    denied: "As notificações foram bloqueadas para este site. Libere nas configurações do navegador e volte aqui.",
+    off: "Ative para receber os lembretes das doses e os avisos importantes neste aparelho.",
+    on: "Este aparelho recebe os lembretes e avisos.",
+  };
+  return (
+    <section className="card stack">
+      <h2>Notificações neste aparelho</h2>
+      {state && <p className={state === "on" ? "" : "muted"}>{descriptions[state]}</p>}
+      {error && <Notice tone="error">{error}</Notice>}
+      {message && <Notice tone="ok">{message}</Notice>}
+      <div className="row wrap">
+        {state === "off" && deviceId && (
+          <button className="btn btn-primary" disabled={busy || !online} onClick={() => void run(async () => setState(await enablePush(deviceId)))}>
+            Ativar notificações
+          </button>
+        )}
+        {state === "on" && deviceId && (
+          <>
+            <button className="btn" disabled={busy || !online} onClick={() => void run(async () => {
+              const r = await testPush();
+              setMessage(r.sent > 0 ? "Aviso de teste enviado." : "Não foi possível entregar o aviso de teste.");
+            })}>Enviar aviso de teste</button>
+            <button className="btn" disabled={busy || !online} onClick={() => void run(async () => {
+              await disablePush(deviceId);
+              setState("off");
+            })}>Desativar</button>
+          </>
+        )}
+      </div>
+      <p className="muted small">
+        Os lembretes chegam pela internet: com o celular sem conexão na hora da dose, o aviso pode atrasar ou não chegar.
+        Confira sempre a tela Hoje.
+      </p>
     </section>
   );
 }

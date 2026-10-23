@@ -117,7 +117,13 @@ confere que o build de produção não contém a chave.
 docker compose run --rm e2e        # com o compose no modo local (acima)
 ```
 
-## Lembretes
+## Lembretes e notificações
+
+Veja [`notificacoes.md`](notificacoes.md). O service worker do app
+(`src/sw.ts`) guarda o app para uso offline e mostra os avisos de push;
+tocar num aviso abre a dose.
+
+## Lembretes (histórico da decisão)
 
 Um PWA não consegue agendar notificações no próprio aparelho. Os lembretes
 virão por **notificação push** enviada pelo servidor (fase 4), por isso

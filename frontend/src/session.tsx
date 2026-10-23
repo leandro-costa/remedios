@@ -5,6 +5,7 @@ import type { AuthBackend, AuthUser } from "./auth";
 import { cached, clearLocalData } from "./db/cache";
 import { ensureDeviceRegistered, forgetDeviceRegistration } from "./sync/device";
 import { startAutoFlush } from "./sync/outbox";
+import { syncPush } from "./sync/push";
 
 const FAMILY_KEY = "remedios.familyId";
 
@@ -62,7 +63,9 @@ export function SessionProvider({ auth, children }: { auth: AuthBackend; childre
       setMe(meResult.data);
       setFamilies(familiesResult.data);
       try {
-        setDeviceId(await ensureDeviceRegistered(meResult.data.id));
+        const id = await ensureDeviceRegistered(meResult.data.id);
+        setDeviceId(id);
+        void syncPush(id);
       } catch (e) {
         if (!(e instanceof OfflineError)) throw e;
         setDeviceId(localStorage.getItem("remedios.deviceId"));
