@@ -16,8 +16,8 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 | Camada | Tecnologia | Situação |
 | --- | --- | --- |
 | Aplicativo | Android — Kotlin, Jetpack Compose, Room, WorkManager | a fazer |
-| API | Java 21, Quarkus REST | **Fase 1 implementada** |
-| Banco central | PostgreSQL 16, migrações Flyway | **esquema completo** |
+| API | Java 27, Quarkus 3.40 REST | **Fase 1 implementada** |
+| Banco central | PostgreSQL 18, migrações Flyway | **esquema completo** |
 | Eventos | transactional outbox → push (FCM) / tempo real | outbox gravada; publicador a fazer |
 
 ```mermaid
@@ -46,7 +46,9 @@ flowchart LR
 ## Estrutura
 
 ```
-backend/                  API Quarkus
+compose.yaml              ambiente completo (banco, API, testes)
+docker/postgres/          inicialização do banco
+backend/                  API Quarkus (Dockerfile, mvnw)
   src/main/resources/db/migration/   migrações Flyway (fonte única do esquema)
   src/main/java/.../
     common/      erros da API
@@ -58,21 +60,55 @@ backend/                  API Quarkus
 docs/                     especificação, API e decisões
 ```
 
-## Executando o backend
+## Versões
 
-Requisitos: JDK 21, Maven 3.9 e PostgreSQL 16 (local ou via Docker).
+O projeto usa sempre a versão **estável mais recente** de cada componente, com
+versões exatas fixadas. O Dependabot (`.github/dependabot.yml`) propõe as
+atualizações toda semana.
+
+| Componente | Versão |
+| --- | --- |
+| Java (Eclipse Temurin) | 27 |
+| Quarkus | 3.40.1.1 |
+| PostgreSQL | 18.6 |
+| Maven | 3.10.0 (via `./mvnw`) |
+
+O build recusa JDK anterior ao 27 e Maven anterior ao 3.10 (maven-enforcer).
+
+## Executando com Docker Compose
+
+Todo o ambiente é organizado pelo `compose.yaml` da raiz. Só é preciso ter o
+Docker instalado.
 
 ```bash
-# Banco para testes (ou use um PostgreSQL já instalado com o mesmo usuário/banco)
-docker compose up -d
+cp .env.example .env               # opcional: ajustar portas, senhas e chave JWT
 
-cd backend
-mvn test          # testes de integração contra o PostgreSQL
-mvn quarkus:dev   # modo desenvolvimento (Dev Services sobe um PostgreSQL via Docker)
+docker compose up -d --build       # PostgreSQL + API em http://localhost:8080
+docker compose run --rm tests      # testes de integração do backend
+docker compose logs -f api         # acompanhar a API
+docker compose down                # parar (use -v para apagar os dados)
 ```
 
-Os testes usam `jdbc:postgresql://localhost:5432/remedios_test` (usuário e
-senha `remedios`). Para outro banco, defina `REMEDIOS_TEST_DB_URL`,
+| Serviço | Imagem | Função |
+| --- | --- | --- |
+| `postgres` | `postgres:18.6` | bancos `remedios` (API) e `remedios_test` (testes) |
+| `api` | build de `backend/Dockerfile` (Temurin 27 JRE) | API REST; health em `/q/health` |
+| `tests` | `maven:3.10.0-eclipse-temurin-27` | `mvn verify` contra o `postgres` do compose |
+
+O CI do GitHub Actions usa os mesmos comandos.
+
+### Sem Docker
+
+Com JDK 27 e um PostgreSQL 18 local (usuário/senha `remedios`, banco
+`remedios_test`):
+
+```bash
+cd backend
+./mvnw verify        # testes
+./mvnw quarkus:dev   # modo desenvolvimento
+```
+
+Para outro banco de testes, defina `REMEDIOS_TEST_DB_URL`,
 `REMEDIOS_TEST_DB_USER` e `REMEDIOS_TEST_DB_PASSWORD`.
 
 ### Autenticação
@@ -86,5 +122,7 @@ identifica a conta. Em produção configure:
 | `REMEDIOS_JWT_PUBLICKEY_LOCATION` | chave pública ou URL do JWKS do provedor |
 | `REMEDIOS_DB_URL`, `REMEDIOS_DB_USER`, `REMEDIOS_DB_PASSWORD` | PostgreSQL |
 
-No modo dev e nos testes é usada a chave de **teste** em
-`backend/src/test/resources` — ela nunca deve ser usada em produção.
+No compose, a chave montada por padrão é a de **teste**, em
+`backend/src/test/resources`, e o mesmo vale para o modo dev e os testes. Ela
+nunca deve ser usada em produção; aponte `REMEDIOS_JWT_PUBLICKEY_FILE` no
+`.env` para a chave real.

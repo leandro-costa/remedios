@@ -1,12 +1,66 @@
-# PostgreSQL local para desenvolvimento e testes (alternativa ao Dev Services).
-#   docker compose up -d
-#   cd backend && mvn test
+# Ambiente do projeto.
+#
+#   docker compose up -d --build              banco + API em http://localhost:8080
+#   docker compose run --rm tests             testes de integração do backend
+#   docker compose down                       para tudo (use -v para apagar os dados)
+#
+# Variáveis opcionais em .env (veja .env.example).
+
+name: remedios
+
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18.6
     environment:
-      POSTGRES_USER: remedios
-      POSTGRES_PASSWORD: remedios
-      POSTGRES_DB: remedios_test
+      POSTGRES_USER: ${POSTGRES_USER:-remedios}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-remedios}
+      POSTGRES_DB: remedios
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ guarda os dados em /var/lib/postgresql/<versão>.
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d remedios"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      REMEDIOS_DB_URL: jdbc:postgresql://postgres:5432/remedios
+      REMEDIOS_DB_USER: ${POSTGRES_USER:-remedios}
+      REMEDIOS_DB_PASSWORD: ${POSTGRES_PASSWORD:-remedios}
+      REMEDIOS_JWT_ISSUER: ${REMEDIOS_JWT_ISSUER:-https://remedios.local/dev}
+      REMEDIOS_JWT_PUBLICKEY_LOCATION: /run/keys/jwt-public.pem
+    volumes:
+      - ${REMEDIOS_JWT_PUBLICKEY_FILE:-./backend/src/test/resources/publicKey.pem}:/run/keys/jwt-public.pem:ro
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+  tests:
+    image: maven:3.10.0-eclipse-temurin-27
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /src
+    command: ["mvn", "-B", "verify"]
+    environment:
+      REMEDIOS_TEST_DB_URL: jdbc:postgresql://postgres:5432/remedios_test
+      REMEDIOS_TEST_DB_USER: ${POSTGRES_USER:-remedios}
+      REMEDIOS_TEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-remedios}
+    volumes:
+      - ./backend:/src
+      # target/ fica num volume anônimo para não sujar o diretório local.
+      - /src/target
+      - maven-repo:/root/.m2
+
+volumes:
+  postgres-data:
+  maven-repo:

@@ -10,13 +10,14 @@
     <name>Remédios — API</name>
 
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>27</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <quarkus.platform.version>3.39.5</quarkus.platform.version>
-        <compiler-plugin.version>3.14.0</compiler-plugin.version>
-        <surefire-plugin.version>3.5.3</surefire-plugin.version>
+        <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
+        <compiler-plugin.version>3.16.0</compiler-plugin.version>
+        <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <enforcer-plugin.version>3.6.3</enforcer-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -84,6 +85,28 @@
 
     <build>
         <plugins>
+            <plugin>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>versoes-minimas</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[27,)</version>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.10.0,)</version>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
