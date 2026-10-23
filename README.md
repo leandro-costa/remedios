@@ -12,6 +12,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 - Decisões provisórias da implementação: [`docs/decisoes.md`](docs/decisoes.md)
 - Autenticação com Firebase: [`docs/firebase.md`](docs/firebase.md)
 - Aplicativo (PWA) e funcionamento offline: [`docs/pwa.md`](docs/pwa.md)
+- Notificações (lembretes e avisos): [`docs/notificacoes.md`](docs/notificacoes.md)
 - Demandas futuras: [`docs/backlog.md`](docs/backlog.md)
 
 ## Arquitetura
@@ -22,7 +23,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 | API | Java 27, Quarkus 3.40 REST | **Fases 1 a 3 implementadas** |
 | Banco central | PostgreSQL 18, migrações Flyway | **esquema completo** |
 | Login | Firebase Authentication (Google, e-mail/senha) | **validação na API pronta** |
-| Eventos | transactional outbox → push (FCM) / tempo real | outbox gravada; publicador a fazer |
+| Notificações | Web Push (VAPID, RFC 8291) + transactional outbox | **lembretes e avisos prontos** |
 
 ```mermaid
 flowchart LR
@@ -31,7 +32,7 @@ flowchart LR
     W -- /api --> API[API Quarkus]
     API --> PG[(PostgreSQL)]
     API --> OUT[Outbox]
-    OUT -.-> PUSH[Web Push - fase 4] -.-> A & B
+    OUT -.-> PUSH[Web Push] -.-> A & B
 ```
 
 ## Roadmap (seção 14 da especificação)
@@ -60,7 +61,12 @@ flowchart LR
   - [x] sintomas e possíveis reações, com início e fim
   - [x] gráfico por tipo com linha de referência da família e doses dadas no mesmo eixo
   - [x] linha do tempo da pessoa (aferições, sintomas e doses), tudo funcionando offline
-- [ ] **Fase 4 — Notificações**: lembretes por Web Push, publicador da outbox
+- [x] **Fase 4 — Notificações**
+  - [x] Web Push padrão (VAPID), cifra RFC 8291 só com o JDK, sem FCM
+  - [x] lembretes antecipado, no horário e repetições até o limite; param ao registrar a dose
+  - [x] "estou cuidando desta dose", horário de silêncio, som/vibração, privacidade na tela bloqueada
+  - [x] publicador da outbox: conflitos para todos; eventos importantes conforme a política da família
+  - [x] lembretes avulsos ("medir de novo às 15:00")
 - [ ] **Fase 5 — Qualidade e segurança**
 
 ### Demandas futuras
@@ -89,8 +95,9 @@ backend/                  API Quarkus (Dockerfile, mvnw)
     occurrence/  doses, administrações, correções, conflitos e histórico
     sync/        operações dos aparelhos e conflitos
     health/      aferições, sintomas e linhas de referência
+    push/        Web Push, lembretes, publicador da outbox, lembretes avulsos
     audit/       auditoria e outbox
-scripts/                  utilitários (token para o modo local)
+scripts/                  utilitários (token do modo local, chaves VAPID)
 docs/                     especificação, API, decisões e Firebase
 ```
 
@@ -168,4 +175,5 @@ passo completo está em [`docs/firebase.md`](docs/firebase.md).
 | Variável | Uso |
 | --- | --- |
 | `FIREBASE_PROJECT_ID` | ID do projeto Firebase (emissor e audiência dos tokens) |
+| `REMEDIOS_VAPID_PUBLIC_KEY`, `REMEDIOS_VAPID_PRIVATE_KEY`, `REMEDIOS_VAPID_SUBJECT` | notificações (gere com `scripts/vapid-keys.sh`; veja [`docs/notificacoes.md`](docs/notificacoes.md)) |
 | `REMEDIOS_DB_URL`, `REMEDIOS_DB_USER`, `REMEDIOS_DB_PASSWORD` | PostgreSQL (definidas pelo compose) |

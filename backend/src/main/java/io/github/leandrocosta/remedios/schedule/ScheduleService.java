@@ -36,7 +36,7 @@ public class ScheduleService {
 
     public ScheduleService(ObjectMapper mapper, EntityManager em,
             @ConfigProperty(name = "remedios.schedule.horizon") Duration horizon) {
-        this.mapper = mapper.copy().setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        this.mapper = mapper.copy().setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
         this.em = em;
         this.horizon = horizon;
     }

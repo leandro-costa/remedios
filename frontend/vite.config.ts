@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // Service worker próprio (src/sw.ts): precache + avisos de push.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: { globPatterns: ["**/*.{js,css,html,svg,png,woff2}"] },
       includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "Remédios da Família",
@@ -33,12 +38,6 @@ export default defineConfig(({ mode }) => {
           { src: "icon-512.png", sizes: "512x512", type: "image/png" },
           { src: "icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
-      },
-      workbox: {
-        // O app abre sem internet; os dados offline ficam no IndexedDB, não no cache HTTP.
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/q\//],
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
       },
     }),
   ],

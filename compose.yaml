@@ -43,6 +43,10 @@ services:
       # Modo local sem Firebase: troque por /run/keys/test-public.pem no .env
       # e gere tokens com scripts/token-local.sh.
       REMEDIOS_JWT_PUBLICKEY_LOCATION: ${REMEDIOS_JWT_PUBLICKEY_LOCATION:-https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com}
+      # Web Push (lembretes): gere com scripts/vapid-keys.sh. Vazio = sem notificações.
+      REMEDIOS_VAPID_PUBLIC_KEY: ${REMEDIOS_VAPID_PUBLIC_KEY:-}
+      REMEDIOS_VAPID_PRIVATE_KEY: ${REMEDIOS_VAPID_PRIVATE_KEY:-}
+      REMEDIOS_VAPID_SUBJECT: ${REMEDIOS_VAPID_SUBJECT:-mailto:admin@localhost}
     volumes:
       - ./backend/src/test/resources/publicKey.pem:/run/keys/test-public.pem:ro
     ports:

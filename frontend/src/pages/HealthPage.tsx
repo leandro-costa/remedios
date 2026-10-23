@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
-import type { MeasurementType, PersonView, ReferenceLineView } from "../api/types";
+import type { CustomReminderView, MeasurementType, PersonView, ReferenceLineView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
 import { MeasurementChart } from "../components/MeasurementChart";
 import { SyncStatus } from "../components/SyncStatus";
@@ -9,7 +9,7 @@ import { useCached } from "../hooks/useCached";
 import { useHealth, type MeasurementItem, type SymptomItem } from "../hooks/useHealth";
 import { useOnline } from "../hooks/useOnline";
 import { formatMeasurement, formatNumber, INTENSITY, MEASUREMENT_TYPES, methodLabel, parseNumber, referenceFor, TYPE_ORDER } from "../lib/health";
-import { formatWhen } from "../lib/time";
+import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
 import { useFamily, useSession } from "../session";
 
 const PERIODS = [
@@ -104,6 +104,8 @@ export function HealthPage() {
       {!health.loading && types.length === 0 && others.length === 0 && (
         <p className="empty">Nenhuma aferição neste período.</p>
       )}
+
+      {personId && <Reminders personId={personId} />}
 
       <Timeline measurements={health.measurements} symptoms={health.symptoms}
         doses={health.doses.map((o) => ({ id: o.id, at: o.administration!.administeredAt, label: o.treatment.name, by: o.administration!.recordedBy?.displayName }))} />
@@ -292,6 +294,77 @@ function Timeline({ measurements, symptoms, doses }: {
           return <li key={e.key}>{e.to ? <Link to={e.to} state={e.state} className="timeline-row">{body}</Link> : <div className="timeline-row">{body}</div>}</li>;
         })}
       </ol>
+    </section>
+  );
+}
+
+/** Lembretes avulsos (ex.: "medir a temperatura de novo"), enviados por notificação. */
+function Reminders({ personId }: { personId: string }) {
+  const family = useFamily();
+  const online = useOnline();
+  const list = useCached(`reminders:${family.id}:${personId}`, () =>
+    api<CustomReminderView[]>(`/families/${family.id}/persons/${personId}/reminders`));
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("Medir a temperatura de novo");
+  const [at, setAt] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
+  const [everyone, setEveryone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create(minutes?: number) {
+    setError(null);
+    const remindAt = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : fromLocalInput(at);
+    try {
+      await api(`/families/${family.id}/persons/${personId}/reminders`, {
+        method: "POST", body: { message: message.trim(), remindAt, notifyEveryone: everyone },
+      });
+      setOpen(false);
+      await list.reload();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+  async function cancel(id: string) {
+    await api(`/families/${family.id}/reminders/${id}`, { method: "DELETE" }).catch((e) => setError(errorMessage(e)));
+    await list.reload();
+  }
+
+  return (
+    <section className="card stack">
+      <div className="title-row">
+        <h2>Lembretes</h2>
+        {!open && <button className="link small" disabled={!online} onClick={() => setOpen(true)}>+ Lembrete</button>}
+      </div>
+      {error && <Notice tone="error">{error}</Notice>}
+      {(list.data ?? []).length > 0 && (
+        <ul className="plain">
+          {list.data!.map((r) => (
+            <li key={r.id} className="row between">
+              <span>{formatTime(r.remindAt)} · {r.message}{r.notifyEveryone ? " (todos)" : ""}</span>
+              <button className="btn btn-small" disabled={!online} onClick={() => void cancel(r.id)}>Cancelar</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.data?.length === 0 && !open && <p className="muted small">Nenhum lembrete agendado.</p>}
+      {open && (
+        <div className="stack">
+          <label>Lembrar de <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={300} /></label>
+          <div className="row wrap">
+            {[30, 60, 120].map((m) => (
+              <button key={m} className="btn btn-small" disabled={!message.trim()} onClick={() => void create(m)}>
+                Em {m < 60 ? `${m} min` : `${m / 60} h`}
+              </button>
+            ))}
+          </div>
+          <div className="row wrap">
+            <label>Ou às <input type="datetime-local" value={at} min={toLocalInput(new Date())} onChange={(e) => setAt(e.target.value)} /></label>
+            <button className="btn btn-primary btn-small" disabled={!message.trim()} onClick={() => void create()}>Agendar</button>
+          </div>
+          <label className="radio"><input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} /> Avisar todos os responsáveis</label>
+          <button className="link small" onClick={() => setOpen(false)}>Cancelar</button>
+          <p className="muted small">O aviso chega por notificação; ative-as na aba Família.</p>
+        </div>
+      )}
     </section>
   );
 }

@@ -51,9 +51,12 @@ public class OccurrenceService {
     private final AuditService audit;
     private final EntityManager em;
     private final Duration maxAdvance;
+    private final Duration claimDuration;
 
     public OccurrenceService(CurrentUser currentUser, FamilyAccess access, DeviceService devices, AuditService audit,
-            EntityManager em, @ConfigProperty(name = "remedios.administration.max-advance") Duration maxAdvance) {
+            EntityManager em, @ConfigProperty(name = "remedios.administration.max-advance") Duration maxAdvance,
+            @ConfigProperty(name = "remedios.reminders.claim") Duration claimDuration) {
+        this.claimDuration = claimDuration;
         this.currentUser = currentUser;
         this.access = access;
         this.devices = devices;
@@ -245,6 +248,43 @@ public class OccurrenceService {
         audit.record(o.familyId, currentUser.id(), ENTITY, o.id, "DOSE_CONFLICT_OPENED", before, proposal,
                 conflict.reason);
         audit.publish(o.familyId, "DOSE_CONFLICT_OPENED", ENTITY, o.id, event(o));
+    }
+
+    // --- "Estou cuidando desta dose" --------------------------------------------
+
+    /** Avisa os outros responsáveis que alguém está cuidando da dose; reduz os lembretes deles. */
+    @Transactional
+    public DoseOccurrence claim(UUID familyId, UUID occurrenceId) {
+        access.requireMember(familyId);
+        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
+                .orElseThrow(() -> ApiException.notFound("Dose"));
+        if (!o.isOpen()) {
+            throw closedError(o);
+        }
+        Instant now = Instant.now();
+        if (o.claimedBy != null && !o.claimedBy.equals(currentUser.id()) && o.claimedUntil.isAfter(now)) {
+            AppUser by = AppUser.findById(o.claimedBy);
+            throw ApiException.conflict("ALREADY_CLAIMED", by.displayName + " já está cuidando desta dose.",
+                    Map.of("claimedBy", Map.of("id", by.id, "displayName", by.displayName),
+                            "claimedUntil", o.claimedUntil.toString()));
+        }
+        o.claimedBy = currentUser.id();
+        o.claimedUntil = now.plus(claimDuration);
+        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_CLAIMED", null,
+                Map.of("claimedUntil", o.claimedUntil.toString()), null);
+        return o;
+    }
+
+    @Transactional
+    public DoseOccurrence releaseClaim(UUID familyId, UUID occurrenceId) {
+        access.requireMember(familyId);
+        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
+                .orElseThrow(() -> ApiException.notFound("Dose"));
+        if (currentUser.id().equals(o.claimedBy)) {
+            o.claimedBy = null;
+            o.claimedUntil = null;
+        }
+        return o;
     }
 
     // --- Revisão de conflitos ---------------------------------------------------
@@ -499,6 +539,8 @@ public class OccurrenceService {
 
     private void close(DoseOccurrence o, DoseOccurrence.Status status, String reason, Instant now) {
         o.status = status;
+        o.claimedBy = null;
+        o.claimedUntil = null;
         o.statusReason = reason;
         o.statusChangedBy = currentUser.id();
         o.statusChangedAt = now;

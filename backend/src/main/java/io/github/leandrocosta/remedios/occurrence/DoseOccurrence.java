@@ -62,6 +62,13 @@ public class DoseOccurrence extends PanacheEntityBase {
     @Column(name = "status_changed_at")
     public Instant statusChangedAt;
 
+    /** "Estou cuidando desta dose" (seção 6.3): não é administração. */
+    @Column(name = "claimed_by")
+    public UUID claimedBy;
+
+    @Column(name = "claimed_until")
+    public Instant claimedUntil;
+
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 

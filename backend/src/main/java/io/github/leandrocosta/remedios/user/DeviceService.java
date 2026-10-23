@@ -49,6 +49,8 @@ public class DeviceService {
         if (device.status == Device.Status.ACTIVE) {
             device.status = Device.Status.REVOKED;
             device.revokedAt = Instant.now();
+            // Aparelho desconectado não recebe mais avisos.
+            io.github.leandrocosta.remedios.push.PushSubscription.delete("deviceId", id);
         }
     }
 

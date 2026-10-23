@@ -103,6 +103,20 @@ public class OccurrenceResource {
                 .getFirst();
     }
 
+    /** "Estou cuidando desta dose": reduz os lembretes dos outros por alguns minutos. */
+    @POST
+    @Path("/occurrences/{occurrenceId}/claim")
+    public OccurrenceView claim(@PathParam("familyId") UUID familyId, @PathParam("occurrenceId") UUID occurrenceId) {
+        return views.of(List.of(occurrences.claim(familyId, occurrenceId))).getFirst();
+    }
+
+    @jakarta.ws.rs.DELETE
+    @Path("/occurrences/{occurrenceId}/claim")
+    public OccurrenceView releaseClaim(@PathParam("familyId") UUID familyId,
+            @PathParam("occurrenceId") UUID occurrenceId) {
+        return views.of(List.of(occurrences.releaseClaim(familyId, occurrenceId))).getFirst();
+    }
+
     /** Decisão humana sobre uma dose com registros divergentes (seção 10.3). */
     @POST
     @Path("/occurrences/{occurrenceId}/resolution")
