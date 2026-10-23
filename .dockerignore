@@ -1,0 +1,8 @@
+# Contexto do build do PWA (raiz).
+.git
+**/node_modules
+**/target
+**/dist
+frontend/test-results
+frontend/playwright-report
+.env

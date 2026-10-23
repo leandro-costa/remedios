@@ -5,6 +5,9 @@ import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
+import io.github.leandrocosta.remedios.sync.SyncConflict;
+import io.github.leandrocosta.remedios.sync.SyncConflictChange;
+import io.github.leandrocosta.remedios.sync.SyncOperation;
 import io.github.leandrocosta.remedios.treatment.Treatment;
 import io.github.leandrocosta.remedios.user.AppUser;
 import io.github.leandrocosta.remedios.user.CurrentUser;
@@ -74,7 +77,8 @@ public class OccurrenceService {
         access.requireMember(familyId);
         requireRange(from, to);
         return query(familyId, from, to, personId, treatmentId, recordedBy,
-                List.of(DoseOccurrence.Status.ADMINISTERED, DoseOccurrence.Status.NOT_ADMINISTERED),
+                List.of(DoseOccurrence.Status.ADMINISTERED, DoseOccurrence.Status.NOT_ADMINISTERED,
+                        DoseOccurrence.Status.REVIEW_REQUIRED),
                 "o.scheduledAt desc, o.slotKey desc", Math.clamp(limit, 1, MAX_HISTORY));
     }
 
@@ -85,35 +89,263 @@ public class OccurrenceService {
 
     // --- Desfechos ------------------------------------------------------------
 
+    /**
+     * Metadados de uma operação vinda de um aparelho (seção 10.1). Quando
+     * presentes, tornam o envio idempotente e permitem detectar divergências:
+     * {@code baseVersion} é a versão da dose que o responsável viu ao tocar no
+     * botão, e {@code recordedAt}, quando tocou (pode ser bem antes do envio,
+     * se o aparelho estava offline).
+     */
+    public record Operation(UUID operationId, Long baseVersion, Instant recordedAt) {
+    }
+
+    public enum Report { ADMINISTER, MARK_NOT_ADMINISTERED }
+
     @Transactional
     public DoseOccurrence administer(UUID familyId, UUID occurrenceId, UUID deviceId, Instant administeredAt,
-            String notes) {
-        access.requireMember(familyId);
-        DoseOccurrence o = lockOpen(familyId, occurrenceId);
-        devices.requireActive(deviceId);
-        Instant now = Instant.now();
-        Instant at = administeredAt == null ? now : administeredAt;
-        requireNotFuture(at, now);
-
-        AdministrationRecord r = newRecord(o, deviceId, at, notes, now);
-        r.persist();
-        close(o, DoseOccurrence.Status.ADMINISTERED, null, now);
-
-        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_ADMINISTERED", null, recordData(o, r), null);
-        audit.publish(familyId, "DOSE_ADMINISTERED", ENTITY, o.id, event(o));
-        return o;
+            String notes, Operation op) {
+        Map<String, Object> proposal = new LinkedHashMap<>();
+        proposal.put("administeredAt", administeredAt == null ? null : administeredAt.toString());
+        proposal.put("notes", Texts.clean(notes));
+        return report(familyId, occurrenceId, Report.ADMINISTER, deviceId, proposal, op);
     }
 
     @Transactional
-    public DoseOccurrence markNotAdministered(UUID familyId, UUID occurrenceId, String reason) {
-        access.requireMember(familyId);
-        DoseOccurrence o = lockOpen(familyId, occurrenceId);
-        Instant now = Instant.now();
-        close(o, DoseOccurrence.Status.NOT_ADMINISTERED, Texts.clean(reason), now);
+    public DoseOccurrence markNotAdministered(UUID familyId, UUID occurrenceId, String reason, UUID deviceId,
+            Operation op) {
+        Map<String, Object> proposal = new LinkedHashMap<>();
+        proposal.put("reason", Texts.clean(reason));
+        return report(familyId, occurrenceId, Report.MARK_NOT_ADMINISTERED, deviceId, proposal, op);
+    }
 
-        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_NOT_ADMINISTERED", null, stateData(o),
-                o.statusReason);
-        audit.publish(familyId, "DOSE_NOT_ADMINISTERED", ENTITY, o.id, event(o));
+    /**
+     * Registra o desfecho informado por um responsável.
+     *
+     * <ul>
+     * <li>Dose em aberto: aplica.</li>
+     * <li>Dose já decidida que o responsável ainda via em aberto
+     * ({@code baseVersion} antiga, típico de registro offline): se os
+     * registros divergem, a dose vai para revisão ({@code REVIEW_REQUIRED}) e
+     * a proposta é preservada; nada é descartado (seção 10.3). Se coincidem
+     * (duas pessoas marcaram "não foi dada"), não há o que fazer.</li>
+     * <li>Dose já decidida e o responsável sabia disso: recusa (409).</li>
+     * </ul>
+     */
+    private DoseOccurrence report(UUID familyId, UUID occurrenceId, Report kind, UUID deviceId,
+            Map<String, Object> proposal, Operation op) {
+        access.requireMember(familyId);
+        boolean tracked = op != null && op.operationId() != null;
+        if (kind == Report.ADMINISTER || tracked) {
+            devices.requireActive(deviceId);
+        }
+        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
+                .orElseThrow(() -> ApiException.notFound("Dose"));
+        Instant now = Instant.now();
+
+        if (tracked) {
+            SyncOperation previous = SyncOperation.find(deviceId, op.operationId()).orElse(null);
+            if (previous != null) {
+                if (!previous.actorId.equals(currentUser.id()) || !previous.entityId.equals(o.id)) {
+                    throw ApiException.conflict("OPERATION_ID_IN_USE",
+                            "Este identificador de operação já foi usado para outra ação.");
+                }
+                return o; // reenvio: os efeitos já foram aplicados
+            }
+        }
+        Instant recordedAt = op == null || op.recordedAt() == null || op.recordedAt().isAfter(now) ? now
+                : op.recordedAt();
+        proposal.put("type", kind.name());
+        proposal.put("recordedBy", currentUser.id().toString());
+        proposal.put("deviceId", deviceId == null ? null : deviceId.toString());
+        proposal.put("recordedAt", recordedAt.toString());
+
+        SyncOperation sync = tracked ? newOperation(o, kind, deviceId, op, proposal, now) : null;
+
+        if (o.isOpen()) {
+            requireNotTooEarly(o, recordedAt);
+            apply(o, kind, deviceId, proposal, recordedAt, sync, now);
+            if (sync != null) {
+                sync.finish(SyncOperation.Status.APPLIED, null);
+            }
+            return o;
+        }
+        boolean sawItOpen = tracked && op.baseVersion() != null && op.baseVersion() < o.version;
+        if (!sawItOpen) {
+            throw closedError(o);
+        }
+        if (agrees(o, kind)) {
+            sync.finish(SyncOperation.Status.APPLIED, Map.of("outcome", "ALREADY_IN_THIS_STATE"));
+            return o;
+        }
+        openConflict(o, sync, proposal, op.baseVersion(), now);
+        sync.finish(SyncOperation.Status.CONFLICT, null);
+        return o;
+    }
+
+    private void apply(DoseOccurrence o, Report kind, UUID deviceId, Map<String, Object> proposal,
+            Instant recordedAt, SyncOperation sync, Instant now) {
+        if (kind == Report.ADMINISTER) {
+            Object given = proposal.get("administeredAt");
+            Instant at = given == null ? recordedAt : Instant.parse((String) given);
+            requireNotFuture(at, now);
+            AdministrationRecord r = newRecord(o, deviceId, at, (String) proposal.get("notes"), now);
+            r.recordedAt = recordedAt;
+            r.syncOperationId = sync == null ? null : sync.id;
+            r.persist();
+            close(o, DoseOccurrence.Status.ADMINISTERED, null, now);
+            audit.record(o.familyId, currentUser.id(), ENTITY, o.id, "DOSE_ADMINISTERED", null, recordData(o, r),
+                    null);
+            audit.publish(o.familyId, "DOSE_ADMINISTERED", ENTITY, o.id, event(o));
+        } else {
+            close(o, DoseOccurrence.Status.NOT_ADMINISTERED, (String) proposal.get("reason"), now);
+            audit.record(o.familyId, currentUser.id(), ENTITY, o.id, "DOSE_NOT_ADMINISTERED", null, stateData(o),
+                    o.statusReason);
+            audit.publish(o.familyId, "DOSE_NOT_ADMINISTERED", ENTITY, o.id, event(o));
+        }
+    }
+
+    /** O desfecho informado coincide com o já registrado? */
+    private static boolean agrees(DoseOccurrence o, Report kind) {
+        return kind == Report.MARK_NOT_ADMINISTERED
+                && (o.status == DoseOccurrence.Status.NOT_ADMINISTERED || o.status == DoseOccurrence.Status.CANCELLED);
+    }
+
+    private void openConflict(DoseOccurrence o, SyncOperation sync, Map<String, Object> proposal, Long baseVersion,
+            Instant now) {
+        SyncConflict conflict = SyncConflict.findOpen(ENTITY, o.id).orElse(null);
+        Map<String, Object> before = stateData(o);
+        if (conflict == null) {
+            conflict = new SyncConflict();
+            conflict.id = UUID.randomUUID();
+            conflict.familyId = o.familyId;
+            conflict.entityType = ENTITY;
+            conflict.entityId = o.id;
+            conflict.baseVersion = baseVersion;
+            conflict.status = SyncConflict.Status.OPEN;
+            conflict.reason = "Registros divergentes para a mesma dose";
+            conflict.details = stateData(o);
+            conflict.createdAt = now;
+            conflict.persist();
+        }
+        SyncConflictChange change = new SyncConflictChange();
+        change.id = UUID.randomUUID();
+        change.conflictId = conflict.id;
+        change.operationId = sync.id;
+        change.baseVersion = baseVersion;
+        change.proposedData = proposal;
+        change.createdAt = now;
+        change.persist();
+
+        if (o.status != DoseOccurrence.Status.REVIEW_REQUIRED) {
+            close(o, DoseOccurrence.Status.REVIEW_REQUIRED, "Registros divergentes: confira antes de decidir.", now);
+        } else {
+            o.version++;
+            o.updatedAt = now;
+        }
+        audit.record(o.familyId, currentUser.id(), ENTITY, o.id, "DOSE_CONFLICT_OPENED", before, proposal,
+                conflict.reason);
+        audit.publish(o.familyId, "DOSE_CONFLICT_OPENED", ENTITY, o.id, event(o));
+    }
+
+    // --- Revisão de conflitos ---------------------------------------------------
+
+    public enum Decision { ADMINISTERED, NOT_ADMINISTERED, CANCELLED }
+
+    /**
+     * Decisão humana sobre uma dose em revisão. {@code proposalId} adota os
+     * dados de uma proposta preservada como a administração válida; sem ele, a
+     * administração já registrada (se houver) é mantida.
+     */
+    public record Resolution(long baseVersion, Decision status, UUID proposalId, Instant administeredAt,
+            UUID deviceId, String reason) {
+    }
+
+    public List<DoseOccurrence> openConflicts(UUID familyId) {
+        access.requireMember(familyId);
+        return DoseOccurrence.list("familyId = ?1 and status = ?2 order by scheduledAt desc", familyId,
+                DoseOccurrence.Status.REVIEW_REQUIRED);
+    }
+
+    @Transactional
+    public DoseOccurrence resolve(UUID familyId, UUID occurrenceId, Resolution r) {
+        access.requireMember(familyId);
+        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
+                .orElseThrow(() -> ApiException.notFound("Dose"));
+        if (o.status != DoseOccurrence.Status.REVIEW_REQUIRED) {
+            throw ApiException.conflict("NO_CONFLICT", "Esta dose não está aguardando revisão.");
+        }
+        if (o.version != r.baseVersion()) {
+            throw new VersionConflictException("A dose", o.version);
+        }
+        SyncConflict conflict = SyncConflict.findOpen(ENTITY, o.id).orElseThrow();
+        String reason = Texts.clean(r.reason());
+        Instant now = Instant.now();
+        AdministrationRecord current = AdministrationRecord.findValid(o.id).orElse(null);
+        Map<String, Object> before = current == null ? stateData(o) : recordData(o, current);
+
+        SyncConflictChange adopted = null;
+        if (r.proposalId() != null) {
+            adopted = SyncConflictChange.<SyncConflictChange>findByIdOptional(r.proposalId())
+                    .filter(c -> c.conflictId.equals(conflict.id))
+                    .filter(c -> Report.ADMINISTER.name().equals(c.proposedData.get("type")))
+                    .orElseThrow(() -> ApiException.unprocessable("INVALID_PROPOSAL",
+                            "Escolha uma proposta de administração deste conflito."));
+            if (r.status() != Decision.ADMINISTERED) {
+                throw ApiException.unprocessable("INVALID_PROPOSAL",
+                        "Adotar uma proposta só faz sentido ao confirmar a administração.");
+            }
+        }
+        boolean replace = adopted != null || r.status() != Decision.ADMINISTERED;
+        if (current != null && replace) {
+            current.voidedAt = now;
+            current.voidedBy = currentUser.id();
+            current.voidReason = reason;
+            em.flush();
+        }
+
+        Map<String, Object> after;
+        if (r.status() == Decision.ADMINISTERED) {
+            AdministrationRecord valid = current;
+            if (adopted != null) {
+                Map<String, Object> p = adopted.proposedData;
+                valid = new AdministrationRecord();
+                valid.id = UUID.randomUUID();
+                valid.doseOccurrenceId = o.id;
+                valid.recordedBy = UUID.fromString((String) p.get("recordedBy"));
+                valid.deviceId = UUID.fromString((String) p.get("deviceId"));
+                valid.syncOperationId = adopted.operationId;
+                valid.recordedAt = Instant.parse((String) p.get("recordedAt"));
+                valid.administeredAt = p.get("administeredAt") == null ? valid.recordedAt
+                        : Instant.parse((String) p.get("administeredAt"));
+                valid.receivedAt = adopted.createdAt;
+                valid.notes = (String) p.get("notes");
+                valid.persist();
+            } else if (valid == null) {
+                devices.requireActive(r.deviceId());
+                Instant at = r.administeredAt() == null ? now : r.administeredAt();
+                requireNotFuture(at, now);
+                valid = newRecord(o, r.deviceId(), at, null, now);
+                valid.persist();
+            }
+            close(o, DoseOccurrence.Status.ADMINISTERED, reason, now);
+            after = recordData(o, valid);
+        } else {
+            close(o, r.status() == Decision.CANCELLED ? DoseOccurrence.Status.CANCELLED
+                    : DoseOccurrence.Status.NOT_ADMINISTERED, reason, now);
+            after = stateData(o);
+        }
+
+        conflict.status = SyncConflict.Status.RESOLVED;
+        conflict.resolvedBy = currentUser.id();
+        conflict.resolvedAt = now;
+        Map<String, Object> resolution = new LinkedHashMap<>();
+        resolution.put("status", r.status().name());
+        resolution.put("proposalId", adopted == null ? null : adopted.id.toString());
+        resolution.put("reason", reason);
+        conflict.resolution = resolution;
+
+        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_CONFLICT_RESOLVED", before, after, reason);
+        audit.publish(familyId, "DOSE_CONFLICT_RESOLVED", ENTITY, o.id, event(o));
         return o;
     }
 
@@ -187,34 +419,53 @@ public class OccurrenceService {
 
     // --- Auxiliares -----------------------------------------------------------
 
-    private DoseOccurrence lockOpen(UUID familyId, UUID occurrenceId) {
-        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
-                .orElseThrow(() -> ApiException.notFound("Dose"));
-        switch (o.status) {
-            case SCHEDULED, PENDING -> {
-            }
+    private ApiException closedError(DoseOccurrence o) {
+        return switch (o.status) {
             case ADMINISTERED -> {
                 AdministrationRecord r = AdministrationRecord.findValid(o.id).orElseThrow();
                 AppUser by = AppUser.findById(r.recordedBy);
                 Map<String, Object> details = new LinkedHashMap<>();
                 details.put("administeredAt", r.administeredAt.toString());
                 details.put("recordedBy", Map.of("id", by.id, "displayName", by.displayName));
-                throw ApiException.conflict("ALREADY_ADMINISTERED",
+                yield ApiException.conflict("ALREADY_ADMINISTERED",
                         by.displayName + " já registrou esta dose. Confira antes de dar outra.", details);
             }
-            case NOT_ADMINISTERED -> throw ApiException.conflict("ALREADY_RECORDED",
+            case NOT_ADMINISTERED -> ApiException.conflict("ALREADY_RECORDED",
                     "Já foi registrado que esta dose não foi dada. Use a correção, se for o caso.");
-            case CANCELLED -> throw ApiException.conflict("OCCURRENCE_CANCELLED",
+            case CANCELLED -> ApiException.conflict("OCCURRENCE_CANCELLED",
                     "Esta dose foi cancelada por uma alteração do tratamento.");
-            case REVIEW_REQUIRED -> throw ApiException.conflict("REVIEW_REQUIRED",
+            case REVIEW_REQUIRED -> ApiException.conflict("REVIEW_REQUIRED",
                     "Esta dose aguarda a revisão de um conflito.");
-        }
-        if (o.scheduledAt.isAfter(Instant.now().plus(maxAdvance))) {
+            default -> throw new IllegalStateException();
+        };
+    }
+
+    /** Evita registrar por engano uma dose de outro dia (conta a partir de quando o responsável tocou). */
+    private void requireNotTooEarly(DoseOccurrence o, Instant recordedAt) {
+        if (o.scheduledAt.isAfter(recordedAt.plus(maxAdvance))) {
             throw ApiException.unprocessable("OCCURRENCE_TOO_EARLY",
                     "Esta dose está prevista para daqui a mais de " + maxAdvance.toHours()
                             + " horas. Confira se escolheu a dose certa.");
         }
-        return o;
+    }
+
+    private SyncOperation newOperation(DoseOccurrence o, Report kind, UUID deviceId, Operation op,
+            Map<String, Object> proposal, Instant now) {
+        SyncOperation s = new SyncOperation();
+        s.id = UUID.randomUUID();
+        s.familyId = o.familyId;
+        s.deviceId = deviceId;
+        s.actorId = currentUser.id();
+        s.operationKey = op.operationId();
+        s.operationType = kind.name();
+        s.entityType = ENTITY;
+        s.entityId = o.id;
+        s.baseVersion = op.baseVersion();
+        s.payload = new LinkedHashMap<>(proposal);
+        s.status = SyncOperation.Status.RECEIVED;
+        s.receivedAt = now;
+        s.persist();
+        return s;
     }
 
     private static void requireNotFuture(Instant at, Instant now) {

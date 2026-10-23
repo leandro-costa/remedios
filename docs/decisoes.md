@@ -11,6 +11,42 @@ ID do projeto, validade), e o UID do Firebase vira `app_user.auth_subject`. Não
 é preciso credencial de serviço na API. Detalhes, configuração e limitações
 (revogação, LGPD) em [`firebase.md`](firebase.md).
 
+## Aplicativo: PWA em vez de Android nativo (Fase 3)
+
+A especificação previa Android (Kotlin, Compose, Room). Adotamos um **PWA**:
+uma base de código para Android, iPhone e computador, sem loja e com
+atualização imediata. O funcionamento offline é o mesmo da especificação:
+IndexedDB no lugar do Room, fila com operações idempotentes e conflitos
+preservados.
+
+O preço é que **um PWA não agenda notificações locais**. Os lembretes virão
+por push do servidor (Fase 4) e dependem de o celular ter internet na hora da
+dose. Se isso se mostrar insuficiente, o mesmo código pode ser empacotado como
+app nativo (Capacitor) com notificações locais. Detalhes em
+[`pwa.md`](pwa.md).
+
+## Sincronização (Fase 3)
+
+- **Idempotência:** cada registro tem `operationId` gerado no aparelho, único
+  por aparelho (`sync_operation`). Reenvios devolvem o estado atual sem
+  repetir efeitos.
+- **Detecção de divergência pela versão-base:** o aparelho envia a versão da
+  dose que o responsável viu ao tocar no botão. Se a dose já foi decidida
+  depois disso e os registros não combinam (administrada × administrada,
+  administrada × não dada, cancelada × administrada), a dose vai para
+  `REVIEW_REQUIRED` e a proposta fica em `sync_conflict_change`. A
+  administração válida existente continua valendo até a decisão. Se os
+  registros combinam (duas pessoas marcaram "não foi dada"), não há conflito.
+- **Decisão humana:** manter o registro atual, adotar uma proposta (que vira
+  o registro válido, com a autoria original) ou concluir que não foi dada.
+  Tudo com motivo, versão e auditoria.
+- **Atualização dos dados:** o app busca de novo ao abrir, ao reconectar e ao
+  enviar a fila. O cursor incremental da seção 10.4 fica para quando o volume
+  justificar.
+- **Alterações de tratamento offline** não são permitidas no app: precisam de
+  conexão, e uma versão desatualizada recebe `409` com a proposta mantida no
+  formulário.
+
 ## Convites (decisão em aberto 1)
 
 Código aleatório de 24 bytes (base64url), uso único, validade de 7 dias, com

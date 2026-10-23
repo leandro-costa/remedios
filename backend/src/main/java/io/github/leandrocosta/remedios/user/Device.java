@@ -19,7 +19,7 @@ import java.util.UUID;
 @Table(name = "device")
 public class Device extends PanacheEntityBase {
 
-    public enum Platform { ANDROID }
+    public enum Platform { ANDROID, WEB }
 
     public enum Status { ACTIVE, REVOKED }
 
