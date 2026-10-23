@@ -32,6 +32,8 @@ existe. Ações administrativas devolvem `403` a membros comuns.
 | 409 | `ALREADY_ADMINISTERED` | a dose já foi registrada; `details` traz quem registrou e o horário |
 | 409 | `ALREADY_RECORDED`, `OCCURRENCE_CANCELLED`, `REVIEW_REQUIRED`, `NOTHING_TO_CORRECT` | desfechos de dose |
 | 409 | `DEVICE_REVOKED`, `DEVICE_ID_IN_USE` | aparelhos |
+| 409 | `OPERATION_ID_IN_USE`, `NO_CONFLICT` | sincronização e conferência |
+| 422 | `INVALID_PROPOSAL` | conferência de conflito |
 | 422 | `DEVICE_NOT_REGISTERED`, `ADMINISTERED_AT_IN_FUTURE`, `OCCURRENCE_TOO_EARLY`, `NO_CHANGE`, `INVALID_RANGE` | registro e consulta de doses |
 
 ## Conta
@@ -41,7 +43,7 @@ existe. Ações administrativas devolvem `403` a membros comuns.
 | GET | `/api/me` | conta atual |
 | PUT | `/api/me` | `{displayName}` |
 | GET | `/api/me/devices` | aparelhos da conta |
-| PUT | `/api/me/devices/{deviceId}` | registra o aparelho `{platform: ANDROID, name?}`; o id (UUID) é gerado no aparelho e a chamada é idempotente |
+| PUT | `/api/me/devices/{deviceId}` | registra o aparelho `{platform: WEB \| ANDROID, name?}`; o id (UUID) é gerado no aparelho e a chamada é idempotente |
 | DELETE | `/api/me/devices/{deviceId}` | desconecta o aparelho (não pode mais registrar doses) |
 | GET / PUT | `/api/me/notification-settings` | preferências pessoais (som, vibração, lembrete antecipado, repetição, confirmação, horário de silêncio, avisos de sincronização, detalhes na tela bloqueada) |
 
@@ -151,8 +153,10 @@ Efeitos na agenda:
 | --- | --- | --- |
 | GET | `/api/families/{f}/occurrences?from=&to=&personId=&treatmentId=` | doses previstas no período (máx. 62 dias), em ordem de horário; a tela **Hoje** usa o dia local do aparelho |
 | GET | `/api/families/{f}/occurrences/{o}` | dose + todos os registros (inclusive invalidados) + trilha de auditoria |
-| POST | `/api/families/{f}/occurrences/{o}/administration` | `{deviceId, administeredAt?, notes?}` |
-| POST | `/api/families/{f}/occurrences/{o}/not-administered` | `{reason?}` |
+| POST | `/api/families/{f}/occurrences/{o}/administration` | `{deviceId, administeredAt?, notes?, operationId?, baseVersion?, recordedAt?}` |
+| POST | `/api/families/{f}/occurrences/{o}/not-administered` | `{reason?, deviceId?, operationId?, baseVersion?, recordedAt?}` |
+| POST | `/api/families/{f}/occurrences/{o}/resolution` | conferência de conflito: `{baseVersion, status, reason, proposalId?, administeredAt?, deviceId?}` |
+| GET | `/api/families/{f}/conflicts` | doses aguardando conferência, com as propostas |
 | POST | `/api/families/{f}/occurrences/{o}/correction` | `{baseVersion, status, reason, administeredAt?, notes?, deviceId?}` |
 | GET | `/api/families/{f}/history?from=&to=&personId=&treatmentId=&recordedBy=&limit=` | doses com desfecho (administrada ou não), mais recentes primeiro |
 
@@ -200,3 +204,41 @@ motivo e a `version` atual da dose (`409 STALE_VERSION` se outra pessoa mexeu
 antes). O registro anterior é **invalidado e preservado** (`voidedAt`,
 `voidedBy`, `voidReason`), e um novo registro é criado quando o resultado é uma
 administração. `OPEN` devolve a dose ao estado em aberto.
+
+### Registros vindos do app (fila offline)
+
+O app envia todo registro com três campos extras:
+
+| Campo | Significado |
+| --- | --- |
+| `operationId` | UUID gerado no aparelho, o mesmo em todos os reenvios. Repetir a chamada devolve o estado atual sem novos efeitos. Exige `deviceId`. |
+| `baseVersion` | `version` da dose que o responsável via ao tocar no botão |
+| `recordedAt` | quando ele tocou (pode ser bem antes do envio, se estava offline); vale para a regra das 6 horas |
+
+Se a dose já foi decidida depois de `baseVersion`:
+
+| Já registrado | Recebido | Resultado |
+| --- | --- | --- |
+| administrada | administrada | `REVIEW_REQUIRED` |
+| administrada | não dada | `REVIEW_REQUIRED` |
+| não dada | administrada | `REVIEW_REQUIRED` |
+| cancelada | administrada | `REVIEW_REQUIRED` |
+| não dada ou cancelada | não dada | nada muda (os registros combinam) |
+| em revisão | qualquer | a proposta entra no conflito aberto |
+
+A resposta é `200` com a dose. Nada é descartado: a administração válida
+existente continua valendo, e o registro recebido fica preservado como
+proposta (`conflict.proposals` no detalhe da dose). Sem `operationId` e
+`baseVersion`, uma dose já decidida devolve `409` como antes.
+
+### Conferência (`resolution`)
+
+| `status` | Efeito |
+| --- | --- |
+| `ADMINISTERED` sem `proposalId` | mantém a administração atual (ou cria uma, com `deviceId` e `administeredAt`) |
+| `ADMINISTERED` com `proposalId` | a proposta escolhida vira a administração válida, com a autoria e o horário originais; a anterior é invalidada e preservada |
+| `NOT_ADMINISTERED` | invalida a administração atual, se houver |
+| `CANCELLED` | idem, marcando a dose como cancelada |
+
+Exige `reason` e a `version` atual da dose. O conflito é encerrado com a
+decisão registrada na auditoria.

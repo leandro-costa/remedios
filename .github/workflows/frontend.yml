@@ -1,0 +1,44 @@
+name: frontend
+
+on:
+  push:
+    paths: ["frontend/**", "backend/**", "compose.yaml", ".github/workflows/frontend.yml"]
+  pull_request:
+    paths: ["frontend/**", "backend/**", "compose.yaml", ".github/workflows/frontend.yml"]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26.12.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build de produção (Firebase) sem a chave de teste
+        run: |
+          npm run build
+          ! grep -rl "PRIVATE KEY" dist
+
+  # O app inteiro pelo docker compose: banco, API e PWA no modo local.
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT_ID: remedios-local
+      REMEDIOS_JWT_PUBLICKEY_LOCATION: /run/keys/test-public.pem
+      VITE_AUTH_MODE: local
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose up -d --build --wait postgres api web
+      - run: docker compose run --rm e2e
+      - if: failure()
+        run: docker compose logs api web
+      - if: always()
+        run: docker compose down -v

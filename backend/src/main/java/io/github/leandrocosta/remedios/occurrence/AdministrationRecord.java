@@ -68,6 +68,6 @@ public class AdministrationRecord extends PanacheEntityBase {
     }
 
     public static List<AdministrationRecord> listAll(UUID occurrenceId) {
-        return list("doseOccurrenceId = ?1 order by recordedAt, receivedAt", occurrenceId);
+        return list("doseOccurrenceId = ?1 order by receivedAt, recordedAt", occurrenceId);
     }
 }

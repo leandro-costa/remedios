@@ -3,6 +3,8 @@ package io.github.leandrocosta.remedios.occurrence;
 import io.github.leandrocosta.remedios.audit.AuditEvent;
 import io.github.leandrocosta.remedios.person.Person;
 import io.github.leandrocosta.remedios.schedule.TreatmentSchedule;
+import io.github.leandrocosta.remedios.sync.SyncConflict;
+import io.github.leandrocosta.remedios.sync.SyncConflictChange;
 import io.github.leandrocosta.remedios.treatment.Treatment;
 import io.github.leandrocosta.remedios.user.AppUser;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -50,8 +52,18 @@ public class OccurrenceViews {
             Map<String, Object> before, Map<String, Object> after) {
     }
 
+    /** Proposta preservada num conflito: o que um responsável informou sem saber do registro anterior. */
+    public record ProposalView(UUID id, String type, Instant administeredAt, String notes, String reason,
+            UserRef recordedBy, UUID deviceId, Instant recordedAt, Instant receivedAt) {
+    }
+
+    /** {@code previous}: estado da dose quando a divergência apareceu. */
+    public record ConflictView(UUID id, Instant createdAt, String reason, Map<String, Object> previous,
+            List<ProposalView> proposals) {
+    }
+
     public record OccurrenceDetail(OccurrenceView occurrence, List<AdministrationView> records,
-            List<TrailEntry> trail) {
+            List<TrailEntry> trail, ConflictView conflict) {
     }
 
     public List<OccurrenceView> of(List<DoseOccurrence> occurrences) {
@@ -91,13 +103,35 @@ public class OccurrenceViews {
         List<AuditEvent> events = AuditEvent.list(
                 "entityType = ?1 and entityId = ?2 order by occurredAt, receivedAt",
                 OccurrenceService.ENTITY, occurrence.id);
-        Map<UUID, AppUser> users = users(Stream.concat(
+        SyncConflict conflict = SyncConflict.findOpen(OccurrenceService.ENTITY, occurrence.id).orElse(null);
+        List<SyncConflictChange> changes = conflict == null ? List.of() : SyncConflictChange.forConflict(conflict.id);
+        Map<UUID, AppUser> users = users(Stream.of(
                 records.stream().flatMap(r -> Stream.of(r.recordedBy, r.voidedBy)),
-                events.stream().map(e -> e.actorId)).toList());
+                events.stream().map(e -> e.actorId),
+                changes.stream().map(c -> uuid(c.proposedData.get("recordedBy")))).flatMap(x -> x).toList());
+        ConflictView conflictView = conflict == null ? null
+                : new ConflictView(conflict.id, conflict.createdAt, conflict.reason, conflict.details,
+                        changes.stream().map(c -> proposal(c, users)).toList());
         return new OccurrenceDetail(of(List.of(occurrence)).getFirst(),
                 records.stream().map(r -> administration(r, users)).toList(),
                 events.stream().map(e -> new TrailEntry(e.eventType, ref(e.actorId, users), e.occurredAt, e.reason,
-                        e.beforeData, e.afterData)).toList());
+                        e.beforeData, e.afterData)).toList(),
+                conflictView);
+    }
+
+    private static ProposalView proposal(SyncConflictChange c, Map<UUID, AppUser> users) {
+        Map<String, Object> p = c.proposedData;
+        return new ProposalView(c.id, (String) p.get("type"), instant(p.get("administeredAt")),
+                (String) p.get("notes"), (String) p.get("reason"), ref(uuid(p.get("recordedBy")), users),
+                uuid(p.get("deviceId")), instant(p.get("recordedAt")), c.createdAt);
+    }
+
+    private static UUID uuid(Object value) {
+        return value == null ? null : UUID.fromString((String) value);
+    }
+
+    private static Instant instant(Object value) {
+        return value == null ? null : Instant.parse((String) value);
     }
 
     private static AdministrationView administration(AdministrationRecord r, Map<UUID, AppUser> users) {

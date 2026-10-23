@@ -21,10 +21,26 @@ import java.util.UUID;
 @Authenticated
 public class OccurrenceResource {
 
-    public record Administer(@NotNull UUID deviceId, Instant administeredAt, @Size(max = 1000) String notes) {
+    /**
+     * {@code operationId}, {@code baseVersion} e {@code recordedAt} são
+     * enviados pelo app (inclusive pela fila offline): tornam o envio
+     * idempotente e permitem preservar registros divergentes.
+     */
+    public record Administer(@NotNull UUID deviceId, Instant administeredAt, @Size(max = 1000) String notes,
+            UUID operationId, Long baseVersion, Instant recordedAt) {
     }
 
-    public record NotAdministered(@Size(max = 1000) String reason) {
+    public record NotAdministered(@Size(max = 1000) String reason, UUID deviceId, UUID operationId,
+            Long baseVersion, Instant recordedAt) {
+    }
+
+    public record Resolve(
+            @NotNull Long baseVersion,
+            @NotNull OccurrenceService.Decision status,
+            UUID proposalId,
+            Instant administeredAt,
+            UUID deviceId,
+            @NotBlank @Size(max = 1000) String reason) {
     }
 
     public record Correct(
@@ -65,15 +81,17 @@ public class OccurrenceResource {
     public OccurrenceView administer(@PathParam("familyId") UUID familyId,
             @PathParam("occurrenceId") UUID occurrenceId, @Valid @NotNull Administer r) {
         return views.of(List.of(occurrences.administer(familyId, occurrenceId, r.deviceId(), r.administeredAt(),
-                r.notes()))).getFirst();
+                r.notes(), new OccurrenceService.Operation(r.operationId(), r.baseVersion(), r.recordedAt()))))
+                .getFirst();
     }
 
     @POST
     @Path("/occurrences/{occurrenceId}/not-administered")
     public OccurrenceView notAdministered(@PathParam("familyId") UUID familyId,
             @PathParam("occurrenceId") UUID occurrenceId, @Valid NotAdministered r) {
-        return views.of(List.of(occurrences.markNotAdministered(familyId, occurrenceId,
-                r == null ? null : r.reason()))).getFirst();
+        NotAdministered n = r == null ? new NotAdministered(null, null, null, null, null) : r;
+        return views.of(List.of(occurrences.markNotAdministered(familyId, occurrenceId, n.reason(), n.deviceId(),
+                new OccurrenceService.Operation(n.operationId(), n.baseVersion(), n.recordedAt())))).getFirst();
     }
 
     @POST
@@ -83,6 +101,23 @@ public class OccurrenceResource {
         return views.of(List.of(occurrences.correct(familyId, occurrenceId, new OccurrenceService.Correction(
                 r.baseVersion(), r.status(), r.administeredAt(), r.notes(), r.reason(), r.deviceId()))))
                 .getFirst();
+    }
+
+    /** Decisão humana sobre uma dose com registros divergentes (seção 10.3). */
+    @POST
+    @Path("/occurrences/{occurrenceId}/resolution")
+    public OccurrenceView resolve(@PathParam("familyId") UUID familyId,
+            @PathParam("occurrenceId") UUID occurrenceId, @Valid @NotNull Resolve r) {
+        return views.of(List.of(occurrences.resolve(familyId, occurrenceId, new OccurrenceService.Resolution(
+                r.baseVersion(), r.status(), r.proposalId(), r.administeredAt(), r.deviceId(), r.reason()))))
+                .getFirst();
+    }
+
+    /** Doses aguardando revisão, com as propostas preservadas. */
+    @GET
+    @Path("/conflicts")
+    public List<OccurrenceDetail> conflicts(@PathParam("familyId") UUID familyId) {
+        return occurrences.openConflicts(familyId).stream().map(views::detail).toList();
     }
 
     @GET
