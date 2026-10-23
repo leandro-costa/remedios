@@ -12,6 +12,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 - Decisões provisórias da implementação: [`docs/decisoes.md`](docs/decisoes.md)
 - Autenticação com Firebase: [`docs/firebase.md`](docs/firebase.md)
 - Aplicativo (PWA) e funcionamento offline: [`docs/pwa.md`](docs/pwa.md)
+- Demandas futuras: [`docs/backlog.md`](docs/backlog.md)
 
 ## Arquitetura
 
@@ -61,6 +62,10 @@ flowchart LR
   - [x] linha do tempo da pessoa (aferições, sintomas e doses), tudo funcionando offline
 - [ ] **Fase 4 — Notificações**: lembretes por Web Push, publicador da outbox
 - [ ] **Fase 5 — Qualidade e segurança**
+
+### Demandas futuras
+
+- [ ] Foto da receita → sugestão de cadastro dos medicamentos e da agenda, sempre conferida pelo responsável ([`docs/backlog.md`](docs/backlog.md))
 
 ## Estrutura
 
