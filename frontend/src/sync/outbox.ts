@@ -35,7 +35,7 @@ export interface NewReport {
 }
 
 export type SubmitResult =
-  | { state: "synced"; occurrence: OccurrenceView }
+  | { state: "synced"; result: unknown }
   | { state: "queued" }
   | { state: "failed"; error: { code: string; message: string } };
 
@@ -44,11 +44,13 @@ export type SubmitResult =
  * envio é imediato; offline, fica na fila até a conexão voltar.
  */
 export async function submitReport(report: NewReport): Promise<SubmitResult> {
+  const action = report.kind === "ADMINISTER" ? "administration" : "not-administered";
   const item: OutboxItem = {
     id: crypto.randomUUID(),
     familyId: report.familyId,
     occurrenceId: report.occurrenceId,
     kind: report.kind,
+    path: `/families/${report.familyId}/occurrences/${report.occurrenceId}/${action}`,
     body: {
       deviceId: report.deviceId,
       baseVersion: report.baseVersion,
@@ -61,6 +63,39 @@ export async function submitReport(report: NewReport): Promise<SubmitResult> {
     attempts: 0,
     state: "pending",
   };
+  return enqueue(item);
+}
+
+export interface NewRecord {
+  familyId: string;
+  personId: string;
+  kind: "MEASUREMENT" | "SYMPTOM";
+  deviceId: string;
+  /** Campos do registro, sem id/deviceId/recordedAt. */
+  fields: Record<string, unknown>;
+}
+
+/**
+ * Aferição ou sintoma: o id do registro é gerado aqui e vai no corpo, o que
+ * torna o reenvio seguro (o servidor reconhece o mesmo id).
+ */
+export async function submitRecord(record: NewRecord): Promise<SubmitResult> {
+  const id = crypto.randomUUID();
+  const collection = record.kind === "MEASUREMENT" ? "measurements" : "symptoms";
+  return enqueue({
+    id,
+    familyId: record.familyId,
+    personId: record.personId,
+    kind: record.kind,
+    path: `/families/${record.familyId}/persons/${record.personId}/${collection}`,
+    body: { ...record.fields, id, deviceId: record.deviceId, recordedAt: new Date().toISOString() },
+    createdAt: Date.now(),
+    attempts: 0,
+    state: "pending",
+  });
+}
+
+async function enqueue(item: OutboxItem): Promise<SubmitResult> {
   waiting.add(item.id);
   await db.outbox.add(item);
   notify();
@@ -75,12 +110,10 @@ export async function submitReport(report: NewReport): Promise<SubmitResult> {
     : { state: "queued" };
 }
 
-async function send(item: OutboxItem): Promise<OccurrenceView> {
-  const path = item.kind === "ADMINISTER" ? "administration" : "not-administered";
-  return api<OccurrenceView>(`/families/${item.familyId}/occurrences/${item.occurrenceId}/${path}`, {
-    method: "POST",
-    body: { ...item.body, operationId: item.id },
-  });
+async function send(item: OutboxItem): Promise<unknown> {
+  // Doses levam operationId; aferições e sintomas já levam o próprio id no corpo.
+  const dose = item.kind === "ADMINISTER" || item.kind === "NOT_ADMINISTERED";
+  return api<OccurrenceView>(item.path, { method: "POST", body: dose ? { ...item.body, operationId: item.id } : item.body });
 }
 
 /**
@@ -95,9 +128,9 @@ export function flush(): Promise<void> {
     for (const item of items) {
       if (item.state !== "pending") continue;
       try {
-        const occurrence = await send(item);
+        const result = await send(item);
         await db.outbox.delete(item.id);
-        settle(item.id, { state: "synced", occurrence });
+        settle(item.id, { state: "synced", result });
       } catch (error) {
         if (error instanceof OfflineError) break;
         if (error instanceof ApiError && error.status === 401) break;

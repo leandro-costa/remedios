@@ -177,3 +177,74 @@ legend { font-weight: 600; margin-bottom: 0.5rem; }
 .links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
 .divider { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.85rem; }
 .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* --- Saúde: gráficos e linha do tempo -------------------------------------- */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --grid: #e6e9ed;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --grid: #2a3036;
+  }
+}
+.tabbar { grid-template-columns: repeat(5, 1fr); }
+.quick { margin: 0.25rem 0; }
+.type-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.value-input { width: 7.5rem; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.big { font-size: 1.3rem; font-weight: 700; }
+.plain-link { color: inherit; text-decoration: none; display: block; }
+.reference-editor { border-top: 1px solid var(--border); margin-top: 0.75rem; padding-top: 0.75rem; }
+
+.chart { margin: 0; }
+.chart-plot { position: relative; width: 100%; touch-action: pan-y; }
+.chart svg { display: block; overflow: visible; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .series-1 { stroke: var(--series-1); }
+.chart .series-2 { stroke: var(--series-2); }
+.chart .marker { stroke: var(--surface); stroke-width: 2; }
+.chart .marker-1 { fill: var(--series-1); }
+.chart .marker-2 { fill: var(--series-2); }
+.chart .marker.pending { fill: var(--surface); stroke-width: 2; stroke-dasharray: 2 2; }
+.chart .marker-1.pending { stroke: var(--series-1); }
+.chart .marker-2.pending { stroke: var(--series-2); }
+/* Tracejada de propósito: é um limiar definido pela família, não grade. */
+.chart .reference { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.chart .reference-label { fill: var(--muted); font-size: 11px; }
+.chart .dose-mark { fill: var(--muted); }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; }
+.chart .hit { fill: transparent; cursor: crosshair; }
+.chart figcaption { margin-top: 0.25rem; }
+.tooltip {
+  position: absolute; top: 0; transform: translateX(-50%); pointer-events: none; z-index: 1;
+  display: flex; flex-direction: column; gap: 0.1rem; min-width: 9rem; max-width: 14rem;
+  padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); font-size: 0.85rem;
+}
+.tooltip-left { transform: translateX(calc(-100% - 10px)); }
+.tooltip-right { transform: translateX(10px); }
+.legend { display: flex; gap: 1rem; list-style: none; padding: 0; margin: 0 0 0.25rem; font-size: 0.85rem; }
+.legend li { display: flex; align-items: center; gap: 0.35rem; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; }
+.swatch-1 { background: var(--series-1); }
+.swatch-2 { background: var(--series-2); }
+table.values { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 0.5rem; }
+table.values th, table.values td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--border); }
+table.values th { color: var(--muted); font-weight: 500; }
+
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline-row { display: grid; grid-template-columns: 6.8rem 0.9rem 1fr; gap: 0.5rem; align-items: start;
+  padding: 0.45rem 0; color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
+.timeline li:last-child .timeline-row { border-bottom: 0; }
+.timeline-when { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.timeline-body { display: flex; flex-direction: column; gap: 0.1rem; }
+.timeline-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.35rem; background: var(--muted); }
+.timeline-measurement { background: var(--series-1); }
+.timeline-symptom, .timeline-symptom-end { background: var(--series-2); }
+.timeline-symptom-end { background: transparent; border: 2px solid var(--series-2); }
+.timeline-dose { background: var(--muted); border-radius: 2px; transform: rotate(45deg) scale(0.85); }

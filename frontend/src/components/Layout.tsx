@@ -5,6 +5,7 @@ import { useFamily } from "../session";
 const NAV = [
   { to: "/", label: "Hoje", icon: "◷" },
   { to: "/tratamentos", label: "Tratamentos", icon: "℞" },
+  { to: "/saude", label: "Saúde", icon: "♡" },
   { to: "/historico", label: "Histórico", icon: "☰" },
   { to: "/familia", label: "Família", icon: "⌂" },
 ];

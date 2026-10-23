@@ -1,42 +1,5 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-
-/**
- * Fuso em que agora é por volta do meio-dia, para que "1 hora atrás" e
- * "daqui a 2 horas" caiam no mesmo dia em qualquer horário do CI.
- */
-const offset = Math.max(-12, Math.min(14, 12 - new Date().getUTCHours()));
-const timezoneId = offset === 0 ? "Etc/UTC" : `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
-
-function localTime(minutesFromNow: number): string {
-  const d = new Date(Date.now() + minutesFromNow * 60_000 + offset * 3_600_000);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-}
-
-const run = Date.now().toString(36);
-
-/** Capturas de tela opcionais (E2E_SCREENSHOTS=pasta), úteis para documentação. */
-async function shot(page: Page, name: string) {
-  if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/${name}.png` });
-}
-
-async function newUser(browser: Browser, name: string): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext({ timezoneId, locale: "pt-BR" });
-  const page = await context.newPage();
-  await page.goto("/");
-  await page.getByLabel("Seu nome").fill(name);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  return { context, page };
-}
-
-async function goOffline(context: BrowserContext, page: Page) {
-  await context.setOffline(true);
-  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-}
-
-async function goOnline(context: BrowserContext, page: Page) {
-  await context.setOffline(false);
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
-}
+import { expect, test } from "@playwright/test";
+import { goOffline, goOnline, localTime, newUser, run, shot } from "./helpers";
 
 test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => {
   const ana = await newUser(browser, `Ana ${run}`);

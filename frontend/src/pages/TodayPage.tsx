@@ -27,7 +27,7 @@ export function TodayPage() {
     }));
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
   const outbox = useOutbox(family.id);
-  const queued = useMemo(() => new Map(outbox.map((i) => [i.occurrenceId, i])), [outbox]);
+  const queued = useMemo(() => new Map(outbox.filter((i) => i.occurrenceId).map((i) => [i.occurrenceId!, i])), [outbox]);
 
   const mine = new Set((persons.data ?? []).filter((p) => p.userId && p.userId === me?.id).map((p) => p.id));
   const doses = (agenda.data ?? [])
@@ -63,6 +63,11 @@ export function TodayPage() {
           <Link to="/conflitos">{review === 1 ? "1 dose precisa" : `${review} doses precisam`} de conferência →</Link>
         </Notice>
       )}
+
+      <div className="row wrap quick">
+        <Link className="btn btn-small" to={`/saude/aferir${personId ? `?pessoa=${personId}` : ""}`}>+ Aferição</Link>
+        <Link className="btn btn-small" to={`/saude/sintoma${personId ? `?pessoa=${personId}` : ""}`}>+ Sintoma</Link>
+      </div>
 
       <div className="chips" role="group" aria-label="Filtrar por pessoa">
         <button className={`chip ${personId === null ? "chip-on" : ""}`} onClick={() => setPersonId(null)}>Todos</button>

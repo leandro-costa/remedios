@@ -203,3 +203,62 @@ export interface OccurrenceDetail {
   trail: TrailEntry[];
   conflict: ConflictView | null;
 }
+
+export type MeasurementType =
+  | "TEMPERATURE"
+  | "HEART_RATE"
+  | "BLOOD_PRESSURE"
+  | "OXYGEN_SATURATION"
+  | "BLOOD_GLUCOSE"
+  | "WEIGHT"
+  | "OTHER";
+
+export interface MeasurementView {
+  id: string;
+  personId: string;
+  type: MeasurementType;
+  value: number;
+  value2: number | null;
+  unit: string;
+  label: string | null;
+  method: string | null;
+  measuredAt: string;
+  notes: string | null;
+  recordedBy: UserRef | null;
+  deviceId: string;
+  recordedAt: string;
+  receivedAt: string;
+  replacesId: string | null;
+  voidedAt: string | null;
+  voidedBy: UserRef | null;
+  voidReason: string | null;
+}
+
+export type Intensity = "MILD" | "MODERATE" | "SEVERE";
+
+export interface SymptomView {
+  id: string;
+  personId: string;
+  description: string;
+  intensity: Intensity | null;
+  startedAt: string;
+  endedAt: string | null;
+  treatmentId: string | null;
+  notes: string | null;
+  version: number;
+  recordedBy: UserRef | null;
+  deviceId: string;
+  recordedAt: string;
+  updatedBy: UserRef | null;
+  updatedAt: string | null;
+}
+
+export interface ReferenceLineView {
+  id: string;
+  personId: string | null;
+  type: Exclude<MeasurementType, "OTHER">;
+  value: number;
+  value2: number | null;
+  label: string;
+  updatedAt: string;
+}
