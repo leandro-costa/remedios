@@ -47,6 +47,22 @@ app nativo (Capacitor) com notificações locais. Detalhes em
   conexão, e uma versão desatualizada recebe `409` com a proposta mantida no
   formulário.
 
+## Saúde: aferições e sintomas
+
+- **Registro, não interpretação.** O app não marca "febre" nem sugere conduta.
+  A linha de referência é definida pela família, por pessoa ou para todos,
+  conforme a orientação profissional, e serve só como marca visual.
+- **Faixas de digitação** por tipo (ex.: temperatura de 30 a 45 °C) evitam
+  erros como 380 no lugar de 38,0. Não são faixas clínicas.
+- **Imutáveis como as doses:** corrigir cria outro registro (`replaces_id`) e
+  invalida o original; excluir exige motivo. Tudo auditado.
+- **Offline sem conflito:** aferições e sintomas só se acumulam (duas pessoas
+  medindo a temperatura não é divergência). O id gerado no aparelho torna o
+  reenvio idempotente.
+- **Sintomas** têm início, fim opcional ("em andamento") e, opcionalmente, o
+  tratamento suspeito ("possível reação"). Registrar uma reação não substitui
+  avisar o profissional de saúde.
+
 ## Convites (decisão em aberto 1)
 
 Código aleatório de 24 bytes (base64url), uso único, validade de 7 dias, com

@@ -3,7 +3,11 @@ import { Layout, Notice, Spinner } from "./components/Layout";
 import { ConflictsPage } from "./pages/ConflictsPage";
 import { DosePage } from "./pages/DosePage";
 import { FamilyPage } from "./pages/FamilyPage";
+import { HealthPage } from "./pages/HealthPage";
+import { MeasurementDetailPage, SymptomDetailPage } from "./pages/HealthDetailPages";
 import { HistoryPage } from "./pages/HistoryPage";
+import { MeasurementFormPage } from "./pages/MeasurementFormPage";
+import { SymptomFormPage } from "./pages/SymptomFormPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -37,6 +41,11 @@ export function App() {
             <Route path="tratamentos/:id" element={<TreatmentDetailPage />} />
             <Route path="tratamentos/:id/editar" element={<TreatmentFormPage />} />
             <Route path="historico" element={<HistoryPage />} />
+            <Route path="saude" element={<HealthPage />} />
+            <Route path="saude/aferir" element={<MeasurementFormPage />} />
+            <Route path="saude/sintoma" element={<SymptomFormPage />} />
+            <Route path="saude/afericoes/:id" element={<MeasurementDetailPage />} />
+            <Route path="saude/sintomas/:id" element={<SymptomDetailPage />} />
             <Route path="familia" element={<FamilyPage />} />
             <Route path="conflitos" element={<ConflictsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

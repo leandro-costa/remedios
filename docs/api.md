@@ -205,6 +205,49 @@ antes). O registro anterior é **invalidado e preservado** (`voidedAt`,
 `voidedBy`, `voidReason`), e um novo registro é criado quando o resultado é uma
 administração. `OPEN` devolve a dose ao estado em aberto.
 
+## Saúde: aferições, sintomas e linhas de referência
+
+O sistema **guarda e mostra** os valores; não os interpreta, não diagnostica e
+não sugere medicamentos.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/families/{f}/persons/{p}/measurements?type=&from=&to=` | aferições válidas do período (máx. 400 dias), em ordem de horário |
+| POST | `/api/families/{f}/persons/{p}/measurements` | `{id, deviceId, type, value, value2?, unit?, label?, method?, measuredAt, notes?, recordedAt?}` |
+| GET | `/api/families/{f}/measurements/{m}` | uma aferição (inclusive invalidada) |
+| POST | `/api/families/{f}/measurements/{m}/correction` | `{deviceId, value, value2?, method?, measuredAt, notes?, reason}`: cria outra aferição (`replacesId`) e invalida a original |
+| POST | `/api/families/{f}/measurements/{m}/void` | `{reason}`: exclui (invalida, sem apagar) |
+| GET | `/api/families/{f}/persons/{p}/symptoms?from=&to=` | sintomas presentes em algum momento do período |
+| POST | `/api/families/{f}/persons/{p}/symptoms` | `{id, deviceId, description, intensity?, startedAt, endedAt?, treatmentId?, notes?, recordedAt?}` |
+| PUT | `/api/families/{f}/symptoms/{s}` | altera (ex.: registrar o fim) com `baseVersion` |
+| POST | `/api/families/{f}/symptoms/{s}/void` | `{reason}` |
+| GET | `/api/families/{f}/reference-lines` | linhas de referência da família |
+| PUT | `/api/families/{f}/reference-lines` | `{personId?, type, value, value2?, label}`: cria ou substitui |
+| DELETE | `/api/families/{f}/reference-lines/{id}` | remove |
+
+O `id` de aferições e sintomas é gerado no aparelho. Reenviar o mesmo `id` não
+duplica o registro, o que torna o envio da fila offline seguro.
+
+| `type` | Unidade | Faixa aceita | `method` |
+| --- | --- | --- | --- |
+| `TEMPERATURE` | °C | 30–45 | `AXILLARY`, `ORAL`, `RECTAL`, `EAR`, `FOREHEAD` |
+| `HEART_RATE` | bpm | 20–250 | — |
+| `BLOOD_PRESSURE` | mmHg | sistólica 50–260, diastólica 30–160 (`value2`), sistólica maior que a diastólica | — |
+| `OXYGEN_SATURATION` | % | 50–100 | — |
+| `BLOOD_GLUCOSE` | mg/dL | 10–800 | `FASTING`, `BEFORE_MEAL`, `AFTER_MEAL`, `RANDOM` |
+| `WEIGHT` | kg | 0,3–400 | — |
+| `OTHER` | `unit` informada | — | — (exige `label`) |
+
+As faixas servem só para pegar erros de digitação (como 380 no lugar de 38,0)
+e não têm significado clínico. Erros: `422 INVALID_MEASUREMENT`,
+`INVALID_SYMPTOM`, `INVALID_REFERENCE`, `REASON_REQUIRED`; `409 ID_IN_USE`,
+`ALREADY_VOIDED`, `STALE_VERSION`.
+
+A **linha de referência** é definida pela família conforme a orientação de um
+profissional de saúde. A da pessoa prevalece sobre a da família
+(`personId: null`). É apenas uma marca no gráfico: não classifica valores nem
+gera alertas.
+
 ### Registros vindos do app (fila offline)
 
 O app envia todo registro com três campos extras:

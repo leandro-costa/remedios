@@ -14,10 +14,20 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | Histórico | `/historico` | filtros por pessoa, tratamento, período e responsável |
 | Família | `/familia` | membros e convites, pessoas, padrões da família, preferências, aparelhos, conta |
 | Para conferir | `/conflitos` | doses com registros divergentes |
+| Saúde | `/saude` | aferições em gráfico (com linha de referência e doses dadas), sintomas em andamento, linha do tempo |
+| Nova aferição / sintoma | `/saude/aferir`, `/saude/sintoma` | registro rápido, inclusive offline |
 
 | Hoje | Dose | Offline | Conferência |
 | --- | --- | --- | --- |
 | ![Hoje](telas/1-hoje.png) | ![Dose](telas/2-dose.png) | ![Registro offline](telas/4-offline.png) | ![Conferência de conflito](telas/5-conferencia.png) |
+
+| Gráfico de temperatura | Saúde |
+| --- | --- |
+| ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) |
+
+O gráfico mostra a série no tempo, a linha de referência da família
+(tracejada), as doses dadas no mesmo eixo (▲) e, ao tocar num ponto, o valor e
+a última dose antes dele. "Ver valores" abre a mesma informação em tabela.
 
 As capturas são geradas pelo teste de ponta a ponta (`E2E_SCREENSHOTS=pasta npm run e2e`).
 
