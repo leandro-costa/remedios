@@ -94,6 +94,17 @@ describe("fila de registros", () => {
     const left = await pendingFor("f1");
     expect(left.map((i) => i.occurrenceId)).toEqual(["o2"]);
   });
+
+  it("mantém a ordem de registros feitos no mesmo milissegundo", async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError("offline")));
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    try {
+      for (const id of ["o1", "o2", "o3", "o4", "o5"]) await submitReport({ ...report, occurrenceId: id });
+    } finally {
+      now.mockRestore();
+    }
+    expect((await pendingFor("f1")).map((i) => i.occurrenceId)).toEqual(["o1", "o2", "o3", "o4", "o5"]);
+  });
 });
 
 describe("cópia offline", () => {

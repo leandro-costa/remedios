@@ -57,12 +57,12 @@ export async function submitReport(report: NewReport): Promise<SubmitResult> {
       notes: report.notes,
       reason: report.reason,
     },
-    createdAt: Date.now(),
+    createdAt: 0,
     attempts: 0,
     state: "pending",
   };
   waiting.add(item.id);
-  await db.outbox.add(item);
+  await enqueue(item);
   notify();
   await flush();
   const result = results.get(item.id);
@@ -73,6 +73,19 @@ export async function submitReport(report: NewReport): Promise<SubmitResult> {
   return stored?.state === "failed" && stored.lastError
     ? { state: "failed", error: stored.lastError }
     : { state: "queued" };
+}
+
+/**
+ * Guarda o item com um createdAt estritamente maior que o do último da fila:
+ * dois registros no mesmo milissegundo (ou com o relógio voltando) não trocam
+ * de ordem no envio.
+ */
+async function enqueue(item: OutboxItem) {
+  await db.transaction("rw", db.outbox, async () => {
+    const last = await db.outbox.orderBy("createdAt").last();
+    item.createdAt = Math.max(Date.now(), (last?.createdAt ?? 0) + 1);
+    await db.outbox.add(item);
+  });
 }
 
 async function send(item: OutboxItem): Promise<OccurrenceView> {
