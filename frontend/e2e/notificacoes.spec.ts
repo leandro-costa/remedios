@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { localTime, newUser, run, shot } from "./helpers";
+import { localTime, newUser, run, shot, activate } from "./helpers";
 
 test("estou cuidando da dose, notificações e lembretes avulsos", async ({ browser }) => {
   // Horários fixados no início: evita a virada de minuto durante o teste.
@@ -30,8 +30,7 @@ test("estou cuidando da dose, notificações e lembretes avulsos", async ({ brow
   await p.getByLabel("Horário 1", { exact: true }).fill(T_PLUS_60);
   await p.getByRole("button", { name: "Conferir" }).click();
   await p.getByRole("button", { name: "Salvar" }).click();
-  await p.getByRole("button", { name: "Ativar agenda" }).click();
-  await p.getByRole("button", { name: "Confirmar" }).click();
+  await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
   const bruno = await newUser(browser, `Bruno N ${run}`);

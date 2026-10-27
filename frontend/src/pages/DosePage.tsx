@@ -10,7 +10,7 @@ import { useOutbox } from "../hooks/useOutbox";
 import { TRAIL_EVENT } from "../lib/labels";
 import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
 import { useFamily, useSession } from "../session";
-import { discard, pendingFor, submitReport } from "../sync/outbox";
+import { discard, mutate, pendingFor, submitReport } from "../sync/outbox";
 
 /** Detalhe e registro de uma dose (seção 7.2). */
 export function DosePage() {
@@ -21,6 +21,8 @@ export function DosePage() {
   const detail = useCached(`dose:${id}`, () => api<OccurrenceDetail>(`/families/${family.id}/occurrences/${id}`));
   const outbox = useOutbox(family.id);
   const queued = outbox.find((i) => i.occurrenceId === id && i.state === "pending");
+  // Correção ou conferência feita offline, ainda não enviada.
+  const change = outbox.find((i) => i.kind === "MUTATION" && i.entityId === id && i.state === "pending");
   const navigate = useNavigate();
 
   const occurrence = detail.data?.occurrence ?? fromAgenda;
@@ -46,11 +48,14 @@ export function DosePage() {
 
       {queued && (
         <Notice tone="warn">
-          Registrado neste aparelho às {formatTime(queued.body.recordedAt)}
+          Registrado neste aparelho às {formatTime(String(queued.body.recordedAt))}
           {queued.kind === "NOT_ADMINISTERED" ? " como não administrada" : ""}. Será enviado quando houver conexão.
         </Notice>
       )}
 
+      {change && (
+        <Notice tone="warn">{change.label} guardada neste aparelho. Será enviada quando houver conexão.</Notice>
+      )}
       {open && !queued && <Claim occurrence={occurrence} onChange={() => void detail.reload()} />}
       {open && !queued && <RecordForm occurrence={occurrence} onDone={() => navigate("/")} />}
       {occurrence.administration && <RecordSummary detail={detail.data} occurrence={occurrence} />}
@@ -63,10 +68,10 @@ export function DosePage() {
       {occurrence.status === "CANCELLED" && (
         <Notice>Dose cancelada{occurrence.statusReason ? `: ${occurrence.statusReason}` : ""}.</Notice>
       )}
-      {occurrence.status === "REVIEW_REQUIRED" && detail.data && (
+      {occurrence.status === "REVIEW_REQUIRED" && detail.data && !change && (
         <ConflictReview detail={detail.data} onDone={() => void detail.reload()} />
       )}
-      {(occurrence.status === "ADMINISTERED" || occurrence.status === "NOT_ADMINISTERED") && (
+      {(occurrence.status === "ADMINISTERED" || occurrence.status === "NOT_ADMINISTERED") && !change && (
         <Correction occurrence={occurrence} onDone={() => void detail.reload()} />
       )}
       {detail.data && <Trail detail={detail.data} />}
@@ -99,6 +104,7 @@ function Claim({ occurrence, onChange }: { occurrence: OccurrenceView; onChange:
       <button className="btn" disabled={!online} onClick={() => void toggle()}>
         {mine ? `Você está cuidando até ${formatTime(occurrence.claimedUntil!)} · liberar` : "Estou cuidando desta dose"}
       </button>
+      {!online && <p className="muted small">"Estou cuidando" avisa os outros na hora; sem conexão, não há como avisar.</p>}
       {!mine && <p className="muted small">Avisa os outros responsáveis e silencia os lembretes deles por alguns minutos. Não registra a dose.</p>}
     </div>
   );
@@ -214,8 +220,8 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
     setBusy(true);
     setError(null);
     try {
-      await api(`/families/${family.id}/occurrences/${occurrence.id}/correction`, {
-        method: "POST",
+      await mutate({
+        familyId: family.id, method: "POST", path: `/families/${family.id}/occurrences/${occurrence.id}/correction`,
         body: {
           baseVersion: occurrence.version,
           status: target,
@@ -223,6 +229,8 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
           administeredAt: target === "ADMINISTERED" ? fromLocalInput(at) : undefined,
           deviceId: target === "ADMINISTERED" ? deviceId : undefined,
         },
+        label: `Correção da dose de ${occurrence.treatment.name}`,
+        entityId: occurrence.id,
       });
       setOpenForm(false);
       onDone();
@@ -235,7 +243,7 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
   return (
     <section className="card stack">
       <h2>Corrigir registro</h2>
-      {!online && <Notice tone="warn">A correção precisa de conexão.</Notice>}
+      {!online && <Notice tone="warn">Sem conexão: a correção fica guardada e é enviada quando a conexão voltar. Se a dose mudar antes disso, o servidor recusa e você decide de novo.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <fieldset className="stack">
         <legend>O que aconteceu de fato?</legend>
@@ -255,7 +263,7 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
       </label>
       <p className="muted small">O registro anterior é preservado no histórico.</p>
       <div className="row">
-        <button className="btn btn-primary" disabled={busy || !online || !reason.trim()} onClick={() => void save()}>Salvar correção</button>
+        <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void save()}>Salvar correção</button>
         <button className="btn" onClick={() => setOpenForm(false)}>Cancelar</button>
       </div>
     </section>
@@ -275,9 +283,11 @@ function ConflictReview({ detail, onDone }: { detail: OccurrenceDetail; onDone: 
     setBusy(true);
     setError(null);
     try {
-      await api(`/families/${family.id}/occurrences/${occurrence.id}/resolution`, {
-        method: "POST",
+      await mutate({
+        familyId: family.id, method: "POST", path: `/families/${family.id}/occurrences/${occurrence.id}/resolution`,
         body: { baseVersion: occurrence.version, status, proposalId, reason: reason.trim() },
+        label: `Conferência da dose de ${occurrence.treatment.name}`,
+        entityId: occurrence.id,
       });
       onDone();
     } catch (e) {
@@ -311,7 +321,7 @@ function ConflictReview({ detail, onDone }: { detail: OccurrenceDetail; onDone: 
             <span className="muted small"> · feito às {formatTime(p.recordedAt ?? p.receivedAt)}</span>
           </p>
           {p.type === "ADMINISTER" && (
-            <button className="btn btn-small" disabled={busy || !online || !reason.trim()} onClick={() => void resolve("ADMINISTERED", p.id)}>
+            <button className="btn btn-small" disabled={busy || !reason.trim()} onClick={() => void resolve("ADMINISTERED", p.id)}>
               Valer este registro
             </button>
           )}
@@ -323,15 +333,15 @@ function ConflictReview({ detail, onDone }: { detail: OccurrenceDetail; onDone: 
       </label>
       <div className="row wrap">
         {occurrence.administration && (
-          <button className="btn btn-primary" disabled={busy || !online || !reason.trim()} onClick={() => void resolve("ADMINISTERED")}>
+          <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void resolve("ADMINISTERED")}>
             Manter o registro atual
           </button>
         )}
-        <button className="btn" disabled={busy || !online || !reason.trim()} onClick={() => void resolve("NOT_ADMINISTERED")}>
+        <button className="btn" disabled={busy || !reason.trim()} onClick={() => void resolve("NOT_ADMINISTERED")}>
           Não foi administrada
         </button>
       </div>
-      {!online && <p className="muted small">A conferência precisa de conexão.</p>}
+      {!online && <p className="muted small">Sem conexão: a decisão fica guardada e é enviada quando a conexão voltar.</p>}
     </section>
   );
 }

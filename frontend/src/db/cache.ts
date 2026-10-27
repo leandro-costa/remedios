@@ -1,5 +1,5 @@
 import { OfflineError } from "../api/client";
-import { db } from "./db";
+import { db, type Effect, type OutboxItem } from "./db";
 
 export interface Cached<T> {
   data: T;
@@ -32,4 +32,64 @@ export async function cached<T>(key: string, fetcher: () => Promise<T>): Promise
 export async function clearLocalData() {
   await db.cache.clear();
   await db.outbox.clear();
+}
+
+/** Marca de um registro que ainda está só neste aparelho. */
+export interface LocalMark {
+  _pending?: boolean;
+}
+
+export function isPending(value: unknown): boolean {
+  return typeof value === "object" && value !== null && (value as LocalMark)._pending === true;
+}
+
+type Row = Record<string, unknown>;
+
+/** Membros são identificados por userId; os demais registros, por id. */
+const rowId = (r: Row) => r.id ?? r.userId;
+
+function matches(effect: Effect, key: string) {
+  return effect.prefix ? key.startsWith(effect.key) : effect.key === key;
+}
+
+/**
+ * Aplica sobre os dados de uma consulta as gravações deste aparelho ainda
+ * não confirmadas, na ordem em que foram feitas. Sem dados guardados (nunca
+ * consultado), a consulta passa a existir se alguma gravação a cria.
+ */
+export function applyLocal<T>(key: string, base: T | undefined, items: OutboxItem[]): T | undefined {
+  let data: unknown = base;
+  for (const item of items) {
+    if (item.state !== "pending") continue;
+    for (const effect of item.effects ?? []) {
+      if (matches(effect, key)) data = applyEffect(data, effect);
+    }
+  }
+  return data as T | undefined;
+}
+
+function applyEffect(data: unknown, effect: Effect): unknown {
+  if (Array.isArray(data) || (data === undefined && effect.op === "upsert" && effect.list)) {
+    const rows = (data ?? []) as Row[];
+    switch (effect.op) {
+      case "upsert": {
+        const id = rowId(effect.value);
+        const found = rows.some((r) => rowId(r) === id);
+        const value = { ...effect.value, _pending: true };
+        return found ? rows.map((r) => (rowId(r) === id ? { ...r, ...value } : r)) : [...rows, value];
+      }
+      case "merge":
+        return rows.map((r) => (rowId(r) === effect.id ? { ...r, ...effect.value, _pending: true } : r));
+      case "remove":
+        return rows.filter((r) => rowId(r) !== effect.id);
+    }
+  }
+  switch (effect.op) {
+    case "upsert":
+      return { ...((data as Row) ?? {}), ...effect.value, _pending: true };
+    case "merge":
+      return data === undefined ? undefined : { ...(data as Row), ...effect.value, _pending: true };
+    case "remove":
+      return data;
+  }
 }

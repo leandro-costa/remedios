@@ -21,9 +21,13 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | --- | --- | --- | --- |
 | ![Hoje](telas/1-hoje.png) | ![Dose](telas/2-dose.png) | ![Registro offline](telas/4-offline.png) | ![Conferência de conflito](telas/5-conferencia.png) |
 
-| Gráfico de temperatura | Saúde |
-| --- | --- |
-| ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) |
+| Gráfico de temperatura | Saúde | Pessoa cadastrada offline | Doses anteriores |
+| --- | --- | --- | --- |
+| ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) | ![Pessoa aguardando envio](telas/9-pessoa-offline.png) | ![Pergunta das doses anteriores](telas/10-doses-anteriores.png) |
+
+Ao ativar um tratamento que começou no passado, o app pergunta se as doses
+anteriores foram dadas, sem resposta marcada: registrar todas no horário
+previsto, deixar em aberto para registrar uma a uma, ou começar a agenda agora.
 
 O gráfico mostra a série no tempo, a linha de referência da família
 (tracejada), as doses dadas no mesmo eixo (▲) e, ao tocar num ponto, o valor e
@@ -56,9 +60,26 @@ flowchart LR
 - **O app nunca mostra "Sincronizado"** enquanto houver registro sem
   confirmação do servidor. Um registro recusado (por exemplo, a dose de outro
   dia) fica visível em Hoje até o responsável tentar de novo ou descartar.
-- **Precisam de conexão:** login, cadastro e alteração de tratamentos, pessoas
-  e família, correções e conferência de conflitos. Esses passos dependem da
-  versão mais recente dos dados.
+- **Tudo é gravado offline:** pessoas, tratamentos (cadastro, alteração,
+  ativação, suspensão), padrões e preferências, correções, conferências,
+  aferições, sintomas, linhas de referência e lembretes. O registro aparece na
+  hora com "Aguardando envio", e o topo de todas as telas mostra quantos
+  faltam enviar. Cada gravação leva uma chave de operação; reenviar não repete
+  efeitos.
+- **Recusado ao sincronizar** (por exemplo, a dose mudou enquanto o aparelho
+  estava offline): aparece em qualquer tela como "Não foi aceito", com
+  "Tentar de novo" e "Descartar".
+- **Tratamento alterado em dois aparelhos:** a alteração que chegar sobre uma
+  versão antiga vai para "Para conferir". O tratamento não muda até alguém
+  decidir (seção 10.2).
+- **Precisam de conexão, por natureza:**
+  - entrar na conta;
+  - criar ou entrar numa família;
+  - gerar convite;
+  - ativar notificações;
+  - "Estou cuidando desta dose", que é um aviso em tempo real.
+
+  Veja [`decisoes.md`](decisoes.md).
 
 ## Instalar no celular
 
@@ -101,6 +122,10 @@ O código do modo local só entra no pacote quando `VITE_AUTH_MODE=local`. O CI
 confere que o build de produção não contém a chave.
 
 ### Testes de ponta a ponta
+
+`e2e/offline.spec.ts` cadastra uma pessoa e um tratamento sem conexão,
+ativa o tratamento (com as doses anteriores informadas como dadas) e confere
+que tudo chega ao servidor na ordem quando a conexão volta.
 
 `e2e/fluxo.spec.ts` simula dois responsáveis em celulares:
 

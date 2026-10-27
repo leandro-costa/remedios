@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { FamilyView } from "../api/types";
 import { Notice } from "../components/Layout";
+import { useOnline } from "../hooks/useOnline";
 import { useSession } from "../session";
 
 /** Primeira família: criar uma nova ou entrar com o código de convite. */
 export function OnboardingPage() {
+  const online = useOnline();
   const session = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -43,6 +45,7 @@ export function OnboardingPage() {
   return (
     <div className="page narrow">
       <h1>Olá, {session.me?.displayName}</h1>
+      {!online && <Notice tone="warn">Sem conexão. Entrar numa família ou criar uma precisa de internet: o convite é conferido pelo servidor, e a família precisa existir lá para os outros responsáveis entrarem.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 
       <section className="card">
@@ -52,7 +55,7 @@ export function OnboardingPage() {
             Código do convite
             <input value={code} onChange={(e) => setCode(e.target.value)} required autoComplete="off" />
           </label>
-          <button className="btn btn-primary" disabled={busy || !code.trim()}>Entrar na família</button>
+          <button className="btn btn-primary" disabled={busy || !online || !code.trim()}>Entrar na família</button>
         </form>
       </section>
 
@@ -64,7 +67,7 @@ export function OnboardingPage() {
             Nome da família
             <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex.: Família Costa" />
           </label>
-          <button className="btn" disabled={busy || !name.trim()}>Criar família</button>
+          <button className="btn" disabled={busy || !online || !name.trim()}>Criar família</button>
         </form>
       </section>
 

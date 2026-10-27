@@ -16,7 +16,7 @@ export function SyncStatus({ familyId, savedAt, fresh }: { familyId: string; sav
   let text = "Sincronizado";
   if (failed > 0) {
     tone = "error";
-    text = `${failed} ${failed === 1 ? "registro não foi aceito" : "registros não foram aceitos"} — veja em Hoje`;
+    text = `${failed} ${failed === 1 ? "registro não foi aceito" : "registros não foram aceitos"} — veja acima`;
   } else if (pending > 0) {
     tone = "warn";
     text = `${pending} ${pending === 1 ? "registro aguardando" : "registros aguardando"} envio`;

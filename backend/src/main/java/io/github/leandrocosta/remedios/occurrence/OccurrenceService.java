@@ -92,6 +92,35 @@ public class OccurrenceService {
 
     // --- Desfechos ------------------------------------------------------------
 
+    /** Nota das administrações informadas ao ativar um tratamento já em andamento. */
+    static final String PAST_DOSES_NOTE = "Informada como dada ao cadastrar o tratamento (horário previsto).";
+
+    /**
+     * Ao ativar um tratamento que começou no passado, o responsável pode
+     * informar que as doses anteriores a agora foram todas dadas. Cada uma é
+     * registrada no horário previsto, com nota e auditoria; o sistema só
+     * registra o que o responsável afirmou (seção 1).
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public int recordPastAsAdministered(UUID familyId, UUID treatmentId, UUID deviceId, Instant now) {
+        List<DoseOccurrence> past = DoseOccurrence.list(
+                "familyId = ?1 and treatmentId = ?2 and status = ?3 and scheduledAt <= ?4 order by scheduledAt",
+                familyId, treatmentId, DoseOccurrence.Status.SCHEDULED, now);
+        for (DoseOccurrence o : past) {
+            AdministrationRecord r = newRecord(o, deviceId, o.scheduledAt, PAST_DOSES_NOTE, now);
+            r.persist();
+            close(o, DoseOccurrence.Status.ADMINISTERED, null, now);
+            audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_ADMINISTERED", null, recordData(o, r),
+                    PAST_DOSES_NOTE);
+        }
+        if (!past.isEmpty()) {
+            // Um único aviso para a família, não um por dose.
+            audit.publish(familyId, "PAST_DOSES_RECORDED", ENTITY, treatmentId,
+                    Map.of("treatmentId", treatmentId, "count", past.size()));
+        }
+        return past.size();
+    }
+
     /**
      * Metadados de uma operação vinda de um aparelho (seção 10.1). Quando
      * presentes, tornam o envio idempotente e permitem detectar divergências:

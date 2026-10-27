@@ -44,3 +44,15 @@ export function localDateTime(minutesFromNow: number): string {
   const d = new Date(Date.now() + minutesFromNow * 60_000 + offset * 3_600_000);
   return d.toISOString().slice(0, 16);
 }
+
+/**
+ * Ativa a agenda do tratamento aberto. Se ele começa no passado, o app
+ * pergunta o que fazer com as doses anteriores; a resposta padrão deixa-as
+ * em aberto.
+ */
+export async function activate(page: Page, past: RegExp = /Não sei ou nem todas/) {
+  await page.getByRole("button", { name: "Ativar agenda" }).click();
+  const option = page.getByRole("radio", { name: past });
+  if (await option.isVisible()) await option.check();
+  await page.getByRole("button", { name: "Confirmar" }).click();
+}

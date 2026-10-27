@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
-import type { RevisionView, TreatmentStatus, TreatmentView } from "../api/types";
+import type { PastDoses, RevisionView, TreatmentStatus, TreatmentView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
-import { useOnline } from "../hooks/useOnline";
 import { TREATMENT_KIND, TREATMENT_STATUS } from "../lib/labels";
-import { describeSchedule } from "../lib/schedule";
-import { formatDate, formatWhen, startOfDay } from "../lib/time";
-import { useFamily } from "../session";
+import { isPending } from "../db/cache";
+import { describeSchedule, slotsBetween } from "../lib/schedule";
+import { formatDate, formatWhen } from "../lib/time";
+import { mutate } from "../sync/outbox";
+import { useFamily, useSession } from "../session";
+
+/** O servidor aceita ativar com início até 30 dias no passado. */
+const MAX_BACKDATE_MS = 30 * 86_400_000 - 5 * 60_000;
+
+/** Ao ativar um rascunho que começou no passado (pergunta obrigatória, sem resposta presumida). */
+type PastChoice = "ADMINISTERED" | "OPEN" | "SKIP";
 
 interface Action {
   to: TreatmentStatus;
@@ -36,32 +43,46 @@ const ACTIONS: Record<TreatmentStatus, Action[]> = {
 export function TreatmentDetailPage() {
   const { id } = useParams();
   const family = useFamily();
-  const online = useOnline();
   const navigate = useNavigate();
   const treatment = useCached(`treatment:${id}`, () => api<TreatmentView>(`/families/${family.id}/treatments/${id}`));
   const revisions = useCached(`revisions:${id}`, () => api<RevisionView[]>(`/families/${family.id}/treatments/${id}/revisions`));
+  const { deviceId } = useSession();
   const [pending, setPending] = useState<Action | null>(null);
-  const [includeToday, setIncludeToday] = useState(true);
+  const [past, setPast] = useState<PastChoice | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const t = treatment.data;
   if (!t) return treatment.loading ? <Spinner /> : <div className="page"><Notice tone="error">{treatment.error}</Notice></div>;
 
+  // Rascunho que começa no passado: as doses anteriores a agora.
+  const now = new Date();
+  const activating = t.status === "DRAFT" && pending?.to === "ACTIVE";
+  const pastFrom = new Date(Math.max(new Date(t.startAt).getTime(), now.getTime() - MAX_BACKDATE_MS));
+  const startsInPast = new Date(t.startAt) < now;
+  const pastSlots = startsInPast ? slotsBetween(t.schedule, new Date(t.startAt), pastFrom, now) : [];
+  const askPast = activating && startsInPast && (pastSlots === null || pastSlots.length > 0);
+
   async function change(action: Action) {
     setBusy(true);
     setError(null);
     try {
-      // Ao ativar um rascunho, as doses de hoje anteriores ao cadastro também entram (até 24 h).
-      const effectiveFrom = t!.status === "DRAFT" && action.to === "ACTIVE" && includeToday
-        ? new Date(Math.max(startOfDay(new Date()).getTime(), new Date(t!.startAt).getTime(), Date.now() - 23 * 3600_000))
-        : new Date();
-      await api(`/families/${family.id}/treatments/${t!.id}/status`, {
-        method: "POST",
-        body: { status: action.to, baseVersion: t!.version, effectiveFrom: effectiveFrom.toISOString() },
+      const fromStart = t!.status === "DRAFT" && action.to === "ACTIVE" && askPast && past !== "SKIP";
+      const effectiveFrom = fromStart ? pastFrom : new Date();
+      const pastDoses: PastDoses = fromStart && past === "ADMINISTERED" ? "ADMINISTERED" : "OPEN";
+      await mutate({
+        familyId: family.id, method: "POST", path: `/families/${family.id}/treatments/${t!.id}/status`,
+        body: { status: action.to, baseVersion: t!.version, effectiveFrom: effectiveFrom.toISOString(), pastDoses, deviceId },
+        // Fila offline: se o tratamento mudar antes do envio, vai para conferência.
+        queuedBody: { preserveConflict: true },
+        label: `${action.label}: ${t!.name}`,
+        effects: [
+          { key: `treatment:${t!.id}`, op: "merge", value: { status: action.to, version: t!.version + 1 } },
+          { key: `treatments:${family.id}`, op: "merge", id: t!.id, value: { status: action.to, version: t!.version + 1 } },
+        ],
       });
       setPending(null);
-      await Promise.all([treatment.reload(), revisions.reload()]);
+      setPast(null);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -76,7 +97,13 @@ export function TreatmentDetailPage() {
         <h1>{t.name}</h1>
         <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
       </div>
-      {!treatment.fresh && <Notice tone="warn">Sem conexão: dados guardados neste aparelho.</Notice>}
+      {!treatment.fresh && <Notice tone="warn">Sem conexão: dados guardados neste aparelho. Alterações ficam guardadas e são enviadas quando a conexão voltar.</Notice>}
+      {isPending(t) && <Notice tone="warn">Alteração aguardando envio. As doses aparecem depois que o servidor confirmar.</Notice>}
+      {t.conflictId && (
+        <Notice tone="warn">
+          Há uma alteração feita sem conexão aguardando conferência. <Link to="/conflitos">Conferir →</Link>
+        </Notice>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
 
       <dl className="facts card">
@@ -89,7 +116,7 @@ export function TreatmentDetailPage() {
         <dt>Versão</dt><dd>{t.version}</dd>
       </dl>
 
-      {online && t.status !== "ENDED" && (
+      {!t.conflictId && t.status !== "ENDED" && (
         <div className="row wrap">
           <Link className="btn" to={`/tratamentos/${t.id}/editar`}>Editar</Link>
           {ACTIONS[t.status].map((a) => (
@@ -97,20 +124,40 @@ export function TreatmentDetailPage() {
           ))}
         </div>
       )}
-      {!online && t.status !== "ENDED" && <p className="muted small">Alterar o tratamento precisa de conexão.</p>}
 
       {pending && (
         <section className="card stack" role="dialog" aria-label="Confirmar">
           <p>{pending.confirm}</p>
-          {t.status === "DRAFT" && pending.to === "ACTIVE" && (
-            <label className="radio">
-              <input type="checkbox" checked={includeToday} onChange={(e) => setIncludeToday(e.target.checked)} />
-              Incluir as doses de hoje que já passaram (para registrar o que já foi dado)
-            </label>
+          {askPast && (
+            <fieldset className="stack">
+              <legend>
+                Este tratamento começou em {formatDate(t.startAt)}.{" "}
+                {pastSlots === null
+                  ? "As doses previstas até agora já foram dadas?"
+                  : `${pastSlots.length === 1 ? "A dose prevista" : `As ${pastSlots.length} doses previstas`} até agora já ${pastSlots.length === 1 ? "foi dada" : "foram dadas"}?`}
+              </legend>
+              {pastFrom.getTime() > new Date(t.startAt).getTime() && (
+                <p className="muted small">Só entram as doses dos últimos 30 dias.</p>
+              )}
+              <label className="radio">
+                <input type="radio" name="past" checked={past === "ADMINISTERED"} onChange={() => setPast("ADMINISTERED")} />
+                {pastSlots?.length === 1
+                  ? "Sim, foi dada no horário previsto (registrar como administrada)"
+                  : "Sim, todas foram dadas nos horários previstos (registrar como administradas)"}
+              </label>
+              <label className="radio">
+                <input type="radio" name="past" checked={past === "OPEN"} onChange={() => setPast("OPEN")} />
+                Não sei ou nem todas: deixar para registrar uma a uma
+              </label>
+              <label className="radio">
+                <input type="radio" name="past" checked={past === "SKIP"} onChange={() => setPast("SKIP")} />
+                Ignorar as anteriores: a agenda começa agora
+              </label>
+            </fieldset>
           )}
           <div className="row">
-            <button className="btn btn-primary" disabled={busy} onClick={() => void change(pending)}>Confirmar</button>
-            <button className="btn" onClick={() => setPending(null)}>Cancelar</button>
+            <button className="btn btn-primary" disabled={busy || (askPast && !past)} onClick={() => void change(pending)}>Confirmar</button>
+            <button className="btn" onClick={() => { setPending(null); setPast(null); }}>Cancelar</button>
           </div>
         </section>
       )}

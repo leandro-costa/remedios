@@ -9,6 +9,27 @@ Rotas sob `/api/families/{familyId}` exigem participação **ativa** na família
 Para quem não participa, a resposta é `404` — a API não revela se a família
 existe. Ações administrativas devolvem `403` a membros comuns.
 
+## Gravações vindas do aparelho (`Idempotency-Key`)
+
+Toda gravação feita pelo app (POST, PUT, DELETE) leva o cabeçalho
+`Idempotency-Key` com um UUID gerado no aparelho, o mesmo em todos os
+reenvios (seção 10.1). A primeira execução guarda status e corpo da resposta;
+um reenvio com a mesma chave recebe exatamente a mesma resposta, com o
+cabeçalho `Idempotent-Replay: true`, sem repetir os efeitos. Assim a fila
+offline reenvia qualquer operação com segurança.
+
+- A chave vale por conta, por 30 dias.
+- Erros de negócio (4xx) também ficam guardados; erros de servidor (5xx), não:
+  a operação pode ser tentada de novo.
+- A mesma chave em outra rota ou outro método: `422 IDEMPOTENCY_KEY_REUSED`.
+  Chave que não é UUID: `400 INVALID_IDEMPOTENCY_KEY`. Operação com a mesma
+  chave ainda em execução: `409 OPERATION_IN_PROGRESS`.
+
+Nos cadastros, o app também envia o `id` do novo registro (família, pessoa,
+tratamento, lembrete avulso, aferição, sintoma). Isso permite, offline,
+cadastrar uma pessoa e logo um tratamento para ela. Um `id` já usado por outro
+registro devolve `409 ID_IN_USE`.
+
 ## Erros
 
 ```json
@@ -25,6 +46,10 @@ existe. Ações administrativas devolvem `403` a membros comuns.
 | 409 | `ALREADY_MEMBER`, `INVITATION_NOT_PENDING` | convites |
 | 409 | `USER_ALREADY_LINKED` | conta já associada a outro perfil da família |
 | 409 | `INVALID_STATUS_TRANSITION`, `TREATMENT_ENDED` | ciclo de vida do tratamento |
+| 409 | `TREATMENT_IN_REVIEW` | há alteração do tratamento aguardando conferência; `details.conflictId` |
+| 409 | `CONFLICT_NOT_OPEN` | conferência de tratamento já concluída |
+| 409 | `ID_IN_USE`, `OPERATION_IN_PROGRESS` | gravações vindas do aparelho |
+| 422 | `IDEMPOTENCY_KEY_REUSED`, `OFFLINE_OPERATION_INCOMPLETE` | gravações vindas do aparelho |
 | 422 | `USER_NOT_MEMBER`, `INVALID_BIRTH_DATE` | pessoas |
 | 422 | `PERSON_NOT_FOUND`, `PERSON_INACTIVE`, `INVALID_PERIOD`, `EFFECTIVE_FROM_IN_PAST` | tratamentos |
 | 422 | `QUIET_HOURS_INCOMPLETE` | preferências pessoais |
@@ -51,7 +76,7 @@ existe. Ações administrativas devolvem `403` a membros comuns.
 
 | Método | Rota | Quem | Descrição |
 | --- | --- | --- | --- |
-| POST | `/api/families` | qualquer conta | cria a família; o criador vira `ADMIN` |
+| POST | `/api/families` | qualquer conta | `{id?, name}`: cria a família; o criador vira `ADMIN` |
 | GET | `/api/families` | — | famílias de que participo, com meu papel |
 | GET | `/api/families/{f}` | membro | |
 | PUT | `/api/families/{f}` | admin | renomear `{name}` |
@@ -74,7 +99,7 @@ hash SHA-256. Convites são de uso único e expiram em 7 dias
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | GET | `/api/families/{f}/persons?active=` | lista |
-| POST | `/api/families/{f}/persons` | `{displayName, birthDate?, userId?, active?}` |
+| POST | `/api/families/{f}/persons` | `{id?, displayName, birthDate?, userId?, active?}` |
 | GET | `/api/families/{f}/persons/{p}` | |
 | PUT | `/api/families/{f}/persons/{p}` | substitui os dados |
 
@@ -89,13 +114,17 @@ conta se associa a no máximo um perfil por família.
 | POST | `/api/families/{f}/treatments` | cria em `DRAFT`, versão 1 |
 | GET | `/api/families/{f}/treatments/{t}` | |
 | PUT | `/api/families/{f}/treatments/{t}` | altera o conteúdo; exige `baseVersion` e `effectiveFrom` |
-| POST | `/api/families/{f}/treatments/{t}/status` | `{status, baseVersion, effectiveFrom?, reason?}` |
+| POST | `/api/families/{f}/treatments/{t}/status` | `{status, baseVersion, effectiveFrom?, reason?, pastDoses?, deviceId?}` |
 | GET | `/api/families/{f}/treatments/{t}/revisions` | todas as versões, com fotografia e autoria |
+| GET | `/api/families/{f}/treatments/conflicts` | alterações feitas offline aguardando conferência |
+| POST | `/api/families/{f}/treatments/{t}/conflict/resolution` | `{conflictId, choice, proposalId?, baseVersion, reason}` |
 
-Criação (`schedule` é opcional no rascunho e obrigatória para ativar):
+Criação (`schedule` é opcional no rascunho e obrigatória para ativar; `id`
+é opcional):
 
 ```json
 {
+  "id": "…",
   "personId": "…",
   "name": "Medicamento A",
   "kind": "CONTINUOUS",
@@ -119,7 +148,49 @@ Cada alteração aceita incrementa `version` e grava, na mesma transação, a
 revisão, o evento de auditoria (antes/depois) e um evento de outbox contendo
 apenas identificadores. Se `baseVersion` não for a versão atual, a resposta é
 `409 STALE_VERSION` com `details.currentVersion`, e nada é alterado. Enviar o
-mesmo conteúdo não cria versão nova.
+mesmo conteúdo não cria versão nova. `TreatmentView.conflictId` indica uma
+alteração aguardando conferência.
+
+### Alterações feitas offline (seção 10.2)
+
+Na fila offline, `PUT` e `status` levam `preserveConflict: true` e `deviceId`
+(além do `Idempotency-Key`). Se a versão-base estiver desatualizada, ou se já
+houver conferência pendente, a alteração **não é aplicada nem descartada**:
+
+- vira proposta num conflito do tratamento;
+- a resposta é `202` com `{status: "IN_REVIEW", conflictId, treatment}`;
+- a família recebe um aviso.
+
+Enquanto o conflito está aberto, o tratamento não muda: alterações online
+recebem `409 TREATMENT_IN_REVIEW`.
+
+Na conferência, `choice` decide o que acontece:
+
+- `KEEP_CURRENT` mantém a versão atual.
+- `ADOPT` aplica a proposta `proposalId` sobre a versão atual, como nova
+  revisão.
+
+As duas opções exigem `reason` e ficam na auditoria. Se o tratamento mudou
+durante a conferência (`baseVersion` diferente), a resposta é
+`409 STALE_VERSION`, e é preciso conferir de novo.
+
+Uma alteração offline sem conflito, de um tratamento já ativo, vale a partir
+do envio. O que foi pedido para "a partir de agora" no aparelho não reescreve
+o período em que ele estava sem conexão.
+
+### Doses anteriores à ativação
+
+Um rascunho pode ser ativado com `effectiveFrom` até 30 dias no passado, para
+um tratamento que já estava em andamento. As doses anteriores a agora seguem
+`pastDoses`:
+
+| `pastDoses` | Efeito |
+| --- | --- |
+| `OPEN` (padrão) | ficam em aberto (atrasadas), para registrar uma a uma |
+| `ADMINISTERED` | o responsável informou que **todas foram dadas**: cada uma é registrada no horário previsto, com nota e auditoria; exige `deviceId` |
+
+O app sempre pergunta, sem resposta marcada. O sistema não presume
+administração (seção 1).
 
 ### Agenda (`schedule`)
 
@@ -139,7 +210,7 @@ Efeitos na agenda:
 
 - **Ativar** gera as doses a partir de `effectiveFrom` até o horizonte de 14
   dias, estendido automaticamente a cada hora. Um rascunho pode ser ativado com
-  `effectiveFrom` até 24 h no passado, para registrar doses do mesmo dia.
+  `effectiveFrom` até 30 dias no passado (veja acima).
 - **Alterar** a agenda, o início ou o término de um tratamento ativo cancela as
   doses **futuras em aberto** a partir de `effectiveFrom` e gera as novas. Doses
   passadas e doses já registradas não mudam. Alterar só nome, dose ou
@@ -216,7 +287,7 @@ administração. `OPEN` devolve a dose ao estado em aberto.
 | POST | `/api/families/{f}/occurrences/{o}/claim` | "estou cuidando desta dose" (20 min); `409 ALREADY_CLAIMED` se outra pessoa já está |
 | DELETE | `/api/families/{f}/occurrences/{o}/claim` | libera |
 | GET | `/api/families/{f}/persons/{p}/reminders` | lembretes avulsos pendentes |
-| POST | `/api/families/{f}/persons/{p}/reminders` | `{message, remindAt, notifyEveryone?}` (até 30 dias) |
+| POST | `/api/families/{f}/persons/{p}/reminders` | `{id?, message, remindAt, notifyEveryone?}` (até 30 dias) |
 | DELETE | `/api/families/{f}/reminders/{id}` | cancela |
 
 As doses trazem `claimedBy` e `claimedUntil` enquanto alguém estiver cuidando.

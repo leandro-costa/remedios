@@ -7,6 +7,7 @@ import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { formatMeasurement, formatNumber, INTENSITY, MEASUREMENT_TYPES, methodLabel, parseNumber } from "../lib/health";
 import { formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
+import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
 
 /** Detalhe de uma aferição: corrigir (preserva a original) ou excluir com motivo. */
@@ -14,7 +15,6 @@ export function MeasurementDetailPage() {
   const { id } = useParams();
   const family = useFamily();
   const { deviceId } = useSession();
-  const online = useOnline();
   const navigate = useNavigate();
   const fromList = (useLocation().state as { measurement?: MeasurementView } | null)?.measurement;
   const loaded = useCached(`measurement:${id}`, () => api<MeasurementView>(`/families/${family.id}/measurements/${id}`));
@@ -65,9 +65,8 @@ export function MeasurementDetailPage() {
       </dl>
       {!m.voidedAt && mode === "view" && (
         <div className="row wrap">
-          <button className="btn" disabled={!online} onClick={startCorrection}>Corrigir</button>
-          <button className="btn" disabled={!online} onClick={() => setMode("discard")}>Excluir</button>
-          {!online && <span className="muted small">Precisa de conexão.</span>}
+          <button className="btn" onClick={startCorrection}>Corrigir</button>
+          <button className="btn" onClick={() => setMode("discard")}>Excluir</button>
         </div>
       )}
       {mode === "correct" && (
@@ -84,10 +83,15 @@ export function MeasurementDetailPage() {
             <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void run(() => {
               const v = parseNumber(value);
               if (v === null) throw new Error("Valor inválido.");
-              return api(`/families/${family.id}/measurements/${m.id}/correction`, {
-                method: "POST",
-                body: { deviceId, value: v, value2: info.pair ? parseNumber(value2) : null, unit: m.unit, label: m.label,
-                  method: m.method, measuredAt: fromLocalInput(at), notes: m.notes, reason: reason.trim() },
+              const fixed = { value: v, value2: info.pair ? parseNumber(value2) : null, measuredAt: fromLocalInput(at) };
+              return mutate({
+                familyId: family.id, method: "POST", path: `/families/${family.id}/measurements/${m.id}/correction`,
+                body: { deviceId, ...fixed, unit: m.unit, label: m.label, method: m.method, notes: m.notes, reason: reason.trim() },
+                label: `Correção de aferição (${info.label})`,
+                effects: [
+                  { key: `measurements:${family.id}:${m.personId}:`, prefix: true, op: "merge", id: m.id, value: fixed },
+                  { key: `measurement:${m.id}`, op: "merge", value: fixed },
+                ],
               });
             })}>Salvar correção</button>
             <button className="btn" onClick={() => setMode("view")}>Cancelar</button>
@@ -99,8 +103,11 @@ export function MeasurementDetailPage() {
           <h2>Excluir aferição</h2>
           <label>Motivo <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} placeholder="Ex.: pessoa errada" /></label>
           <div className="row">
-            <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void run(() =>
-              api(`/families/${family.id}/measurements/${m.id}/void`, { method: "POST", body: { reason: reason.trim() } }))}>Excluir</button>
+            <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void run(() => mutate({
+              familyId: family.id, method: "POST", path: `/families/${family.id}/measurements/${m.id}/void`, body: { reason: reason.trim() },
+              label: `Exclusão de aferição (${info.label})`,
+              effects: [{ key: `measurements:${family.id}:${m.personId}:`, prefix: true, op: "remove", id: m.id }],
+            }))}>Excluir</button>
             <button className="btn" onClick={() => setMode("view")}>Cancelar</button>
           </div>
         </section>
@@ -131,10 +138,12 @@ export function SymptomDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      await api(`/families/${family.id}/symptoms/${s!.id}`, {
-        method: "PUT",
+      await mutate({
+        familyId: family.id, method: "PUT", path: `/families/${family.id}/symptoms/${s!.id}`,
         body: { baseVersion: s!.version, description: s!.description, intensity: s!.intensity, startedAt: s!.startedAt,
           endedAt: s!.endedAt, treatmentId: s!.treatmentId, notes: s!.notes, ...patch },
+        label: `Alteração do sintoma ${s!.description}`,
+        effects: [{ key: `symptoms:${family.id}:${s!.personId}:`, prefix: true, op: "merge", id: s!.id, value: { ...patch, version: s!.version + 1 } }],
       });
       back();
     } catch (e) {
@@ -158,12 +167,12 @@ export function SymptomDetailPage() {
         <dt>Registrado por</dt><dd>{s.recordedBy?.displayName} · {formatWhen(s.recordedAt)}</dd>
         {s.updatedBy && (<><dt>Alterado por</dt><dd>{s.updatedBy.displayName} · {formatWhen(s.updatedAt!)}</dd></>)}
       </dl>
-      {!online && <Notice tone="warn">Alterar precisa de conexão.</Notice>}
+      {!online && <Notice tone="warn">Sem conexão: as alterações ficam guardadas e são enviadas quando a conexão voltar.</Notice>}
       {!s.endedAt && (
         <section className="card stack">
           <h2>Terminou?</h2>
           <label>Terminou em <input type="datetime-local" value={endedAt} max={toLocalInput(new Date())} onChange={(e) => setEndedAt(e.target.value)} /></label>
-          <button className="btn btn-primary" disabled={busy || !online} onClick={() => void update({ endedAt: fromLocalInput(endedAt) })}>Registrar fim</button>
+          <button className="btn btn-primary" disabled={busy} onClick={() => void update({ endedAt: fromLocalInput(endedAt) })}>Registrar fim</button>
         </section>
       )}
       <section className="card stack">
@@ -174,16 +183,20 @@ export function SymptomDetailPage() {
               onClick={() => setIntensity(i)}>{INTENSITY[i]}</button>
           ))}
         </div>
-        <button className="btn" disabled={busy || !online || intensity === s.intensity} onClick={() => void update({ intensity })}>Salvar intensidade</button>
+        <button className="btn" disabled={busy || intensity === s.intensity} onClick={() => void update({ intensity })}>Salvar intensidade</button>
       </section>
       {discarding ? (
         <section className="card stack">
           <label>Motivo da exclusão <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></label>
           <div className="row">
-            <button className="btn btn-primary" disabled={busy || !online || !reason.trim()} onClick={() => void (async () => {
+            <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void (async () => {
               setBusy(true);
               try {
-                await api(`/families/${family.id}/symptoms/${s.id}/void`, { method: "POST", body: { reason: reason.trim() } });
+                await mutate({
+                  familyId: family.id, method: "POST", path: `/families/${family.id}/symptoms/${s.id}/void`, body: { reason: reason.trim() },
+                  label: `Exclusão do sintoma ${s.description}`,
+                  effects: [{ key: `symptoms:${family.id}:${s.personId}:`, prefix: true, op: "remove", id: s.id }],
+                });
                 back();
               } catch (e) {
                 setError(errorMessage(e));

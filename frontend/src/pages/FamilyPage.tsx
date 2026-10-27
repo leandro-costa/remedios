@@ -10,6 +10,8 @@ import { useOnline } from "../hooks/useOnline";
 import { ROLE } from "../lib/labels";
 import { formatDate, formatWhen } from "../lib/time";
 import { disablePush, enablePush, pushState, testPush, type PushState } from "../sync/push";
+import { isPending } from "../db/cache";
+import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
 
 /** Família e configurações (seção 7.5). */
@@ -21,7 +23,7 @@ export function FamilyPage() {
   return (
     <div className="page">
       <h1>Família e configurações</h1>
-      {!online && <Notice tone="warn">Sem conexão: as alterações desta tela precisam de internet.</Notice>}
+      {!online && <Notice tone="warn">Sem conexão: as alterações ficam guardadas neste aparelho e são enviadas quando a conexão voltar. Convites e notificações precisam de internet.</Notice>}
       {session.families.length > 1 && (
         <label>
           Família
@@ -69,6 +71,7 @@ function useAction() {
 function Members({ isAdmin }: { isAdmin: boolean }) {
   const family = useFamily();
   const session = useSession();
+  const online = useOnline();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
   const [invites, setInvites] = useState<InvitationView[]>([]);
   const [issued, setIssued] = useState<IssuedInvitation | null>(null);
@@ -97,17 +100,22 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
               {isAdmin && m.userId !== session.me?.id && (
                 <>
                   <button className="btn btn-small" disabled={busy} onClick={() => void run(async () => {
-                    await api(`/families/${family.id}/members/${m.userId}/role`, { method: "PUT", body: { role: m.role === "ADMIN" ? "MEMBER" : "ADMIN" } });
-                    await members.reload();
+                    const newRole = m.role === "ADMIN" ? "MEMBER" : "ADMIN";
+                    await mutate({
+                      familyId: family.id, method: "PUT", path: `/families/${family.id}/members/${m.userId}/role`, body: { role: newRole },
+                      label: `Papel de ${m.displayName}`,
+                      effects: [{ key: `members:${family.id}`, op: "merge", id: m.userId, value: { role: newRole } }],
+                    });
                   })}>{m.role === "ADMIN" ? "Tornar membro" : "Tornar administrador"}</button>
-                  <button className="btn btn-small" disabled={busy} onClick={() => confirm(`Remover ${m.displayName} da família?`) && void run(async () => {
-                    await api(`/families/${family.id}/members/${m.userId}`, { method: "DELETE" });
-                    await members.reload();
-                  })}>Remover</button>
+                  <button className="btn btn-small" disabled={busy} onClick={() => confirm(`Remover ${m.displayName} da família?`) && void run(() => mutate({
+                    familyId: family.id, method: "DELETE", path: `/families/${family.id}/members/${m.userId}`,
+                    label: `Remover ${m.displayName} da família`,
+                    effects: [{ key: `members:${family.id}`, op: "remove", id: m.userId }],
+                  }))}>Remover</button>
                 </>
               )}
               {m.userId === session.me?.id && (
-                <button className="btn btn-small" disabled={busy} onClick={() => confirm("Sair desta família?") && void run(async () => {
+                <button className="btn btn-small" disabled={busy || !online} onClick={() => confirm("Sair desta família?") && void run(async () => {
                   await api(`/families/${family.id}/members/${m.userId}`, { method: "DELETE" });
                   await session.refresh();
                 })}>Sair</button>
@@ -123,11 +131,12 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
               <option value="MEMBER">Convidar como membro</option>
               <option value="ADMIN">Convidar como administrador</option>
             </select>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {
+            <button className="btn btn-primary" disabled={busy || !online} onClick={() => void run(async () => {
               setIssued(await api<IssuedInvitation>(`/families/${family.id}/invitations`, { method: "POST", body: { role } }));
               await loadInvites();
             })}>Convidar responsável</button>
           </div>
+          {!online && <p className="muted small">O convite precisa de conexão: o código só vale depois de registrado no servidor.</p>}
           {issued && (
             <Notice tone="ok">
               <p>Código do convite (vale até {formatDate(issued.expiresAt)}, uso único):</p>
@@ -141,7 +150,8 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
                 <li key={i.id} className="row between">
                   <span>Convite pendente ({ROLE[i.role]}) · até {formatDate(i.expiresAt)}</span>
                   <button className="btn btn-small" onClick={() => void run(async () => {
-                    await api(`/families/${family.id}/invitations/${i.id}`, { method: "DELETE" });
+                    await mutate({ familyId: family.id, method: "DELETE", path: `/families/${family.id}/invitations/${i.id}`, label: "Revogar convite" });
+                    setInvites((list) => list.filter((x) => x.id !== i.id));
                     await loadInvites();
                   })}>Revogar</button>
                 </li>
@@ -166,17 +176,33 @@ function Persons() {
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    const ok = await run(() => api(`/families/${family.id}/persons`, {
-      method: "POST", body: { displayName: name.trim(), birthDate: birthDate || null, userId: isMe ? me?.id : null },
+    // Id gerado aqui: a pessoa já pode receber tratamentos e aferições offline.
+    const person: PersonView = { id: crypto.randomUUID(), displayName: name.trim(), birthDate: birthDate || null, userId: isMe ? me?.id ?? null : null, active: true };
+    const ok = await run(() => mutate({
+      familyId: family.id, method: "POST", path: `/families/${family.id}/persons`, body: { ...person },
+      label: `Nova pessoa: ${person.displayName}`,
+      effects: [
+        { key: `persons-all:${family.id}`, op: "upsert", value: { ...person }, list: true },
+        { key: `persons:${family.id}`, op: "upsert", value: { ...person }, list: true },
+      ],
     }));
     if (ok) {
       setName(""); setBirthDate(""); setIsMe(false);
-      await persons.reload();
     }
   }
-  const update = (p: PersonView, patch: Partial<PersonView>) => run(async () => {
-    await api(`/families/${family.id}/persons/${p.id}`, { method: "PUT", body: { ...p, ...patch } });
-    await persons.reload();
+  const update = (p: PersonView, patch: Partial<PersonView>) => run(() => {
+    const next = { ...p, ...patch };
+    return mutate({
+      familyId: family.id, method: "PUT", path: `/families/${family.id}/persons/${p.id}`,
+      body: { displayName: next.displayName, birthDate: next.birthDate, userId: next.userId, active: next.active },
+      label: `Alteração de ${p.displayName}`,
+      effects: [
+        { key: `persons-all:${family.id}`, op: "merge", id: p.id, value: patch },
+        next.active
+          ? { key: `persons:${family.id}`, op: "upsert", value: { ...next }, list: true }
+          : { key: `persons:${family.id}`, op: "remove", id: p.id },
+      ],
+    });
   });
 
   return (
@@ -189,6 +215,7 @@ function Persons() {
             <span className={p.active ? "" : "muted"}>
               {p.displayName}{p.userId === me?.id ? " (você)" : ""}{p.birthDate ? ` · ${formatDate(p.birthDate + "T12:00:00")}` : ""}
               {!p.active && " · inativo"}
+              {isPending(p) && <span className="badge badge-queued">Aguardando envio</span>}
             </span>
             <span className="row">
               <button className="btn btn-small" disabled={busy} onClick={() => {
@@ -245,6 +272,7 @@ function Defaults({ isAdmin }: { isAdmin: boolean }) {
       <h2>Padrões da família</h2>
       <p className="muted small">Valem para novos tratamentos e para todos os responsáveis. Não alteram tratamentos já ativados.</p>
       {error && <Notice tone="error">{error}</Notice>}
+      {isPending(s) && <span className="badge badge-queued">Aguardando envio</span>}
       <div className="row wrap">
         {field("reminderBeforeMinutes", "Lembrete antecipado", "min antes")}
         {field("repeatIntervalMinutes", "Repetir a cada", "min")}
@@ -255,9 +283,14 @@ function Defaults({ isAdmin }: { isAdmin: boolean }) {
       {draft && (
         <div className="row">
           <button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {
-            await api(`/families/${family.id}/settings`, { method: "PUT", body: { ...draft, baseVersion: draft.version } });
+            const { version, ...values } = draft;
+            await mutate({
+              familyId: family.id, method: "PUT", path: `/families/${family.id}/settings`, body: { ...values, baseVersion: version },
+              label: "Padrões da família",
+              // A próxima alteração parte da versão que esta vai criar.
+              effects: [{ key: `settings:${family.id}`, op: "merge", value: { ...values, version: version + 1 } }],
+            });
             setDraft(null);
-            await settings.reload();
           })}>Salvar padrões</button>
           <button className="btn" onClick={() => setDraft(null)}>Cancelar</button>
         </div>
@@ -268,13 +301,17 @@ function Defaults({ isAdmin }: { isAdmin: boolean }) {
 
 function Preferences() {
   const { me } = useSession();
+  const family = useFamily();
   const prefs = useCached(`prefs:${me?.id}`, () => api<NotificationSettings>("/me/notification-settings"));
   const { busy, error, run } = useAction();
   if (!prefs.data) return null;
   const p = prefs.data;
-  const save = (patch: Partial<NotificationSettings>) => void run(async () => {
-    await api("/me/notification-settings", { method: "PUT", body: { ...p, ...patch } });
-    await prefs.reload();
+  const save = (patch: Partial<NotificationSettings>) => void run(() => {
+    return mutate({
+      familyId: family.id, method: "PUT", path: "/me/notification-settings", body: { ...p, ...patch },
+      label: "Suas preferências de aviso",
+      effects: [{ key: `prefs:${me?.id}`, op: "merge", value: patch }],
+    });
   });
   const toggle = (key: keyof NotificationSettings, label: string) => (
     <label className="switch">
@@ -364,6 +401,7 @@ function PushSettings() {
 
 function Devices() {
   const { deviceId } = useSession();
+  const family = useFamily();
   const devices = useCached("devices", () => api<DeviceView[]>("/me/devices"));
   const { busy, error, run } = useAction();
   const active = (devices.data ?? []).filter((d) => d.status === "ACTIVE");
@@ -377,10 +415,10 @@ function Devices() {
             <span>{d.name ?? "Aparelho"}{d.id === deviceId ? " (este)" : ""}
               <span className="muted small"> · usado {d.lastSeenAt ? formatWhen(d.lastSeenAt) : "—"}</span></span>
             {d.id !== deviceId && (
-              <button className="btn btn-small" disabled={busy} onClick={() => confirm("Desconectar este aparelho? Ele não poderá mais registrar doses.") && void run(async () => {
-                await api(`/me/devices/${d.id}`, { method: "DELETE" });
-                await devices.reload();
-              })}>Desconectar</button>
+              <button className="btn btn-small" disabled={busy} onClick={() => confirm("Desconectar este aparelho? Ele não poderá mais registrar doses.") && void run(() => mutate({
+                familyId: family.id, method: "DELETE", path: `/me/devices/${d.id}`, label: `Desconectar ${d.name ?? "aparelho"}`,
+                effects: [{ key: "devices", op: "remove", id: d.id }],
+              }))}>Desconectar</button>
             )}
           </li>
         ))}

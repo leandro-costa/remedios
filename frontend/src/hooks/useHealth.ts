@@ -56,7 +56,7 @@ function pendingMeasurement(item: OutboxItem): MeasurementItem {
     id: item.id, personId: item.personId!, type: b.type as MeasurementType, value: Number(b.value),
     value2: b.value2 == null ? null : Number(b.value2), unit: String(b.unit ?? ""), label: (b.label as string) ?? null,
     method: (b.method as string) ?? null, measuredAt: String(b.measuredAt), notes: (b.notes as string) ?? null,
-    recordedBy: null, deviceId: item.body.deviceId, recordedAt: item.body.recordedAt, receivedAt: item.body.recordedAt,
+    recordedBy: null, deviceId: String(item.body.deviceId), recordedAt: String(item.body.recordedAt), receivedAt: String(item.body.recordedAt),
     replacesId: null, voidedAt: null, voidedBy: null, voidReason: null, pending: true,
   };
 }
@@ -66,7 +66,7 @@ function pendingSymptom(item: OutboxItem): SymptomItem {
   return {
     id: item.id, personId: item.personId!, description: String(b.description), intensity: (b.intensity as SymptomView["intensity"]) ?? null,
     startedAt: String(b.startedAt), endedAt: (b.endedAt as string) ?? null, treatmentId: (b.treatmentId as string) ?? null,
-    notes: (b.notes as string) ?? null, version: 0, recordedBy: null, deviceId: item.body.deviceId,
-    recordedAt: item.body.recordedAt, updatedBy: null, updatedAt: null, pending: true,
+    notes: (b.notes as string) ?? null, version: 0, recordedBy: null, deviceId: String(item.body.deviceId),
+    recordedAt: String(item.body.recordedAt), updatedBy: null, updatedAt: null, pending: true,
   };
 }

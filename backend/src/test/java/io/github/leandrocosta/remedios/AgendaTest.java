@@ -75,7 +75,7 @@ class AgendaTest {
         assertEquals(true, dose.get("late"));
 
         d.ana.req().body(Map.of("status", "ACTIVE", "baseVersion", 1, "effectiveFrom",
-                d.now.minus(3, ChronoUnit.DAYS).toString()))
+                d.now.minus(31, ChronoUnit.DAYS).toString()))
                 .post("/api/families/{f}/treatments/{tr}/status", d.family, d.createTreatment(Dosing.dailyAt(d.now)))
                 .then().statusCode(422).body("code", equalTo("EFFECTIVE_FROM_IN_PAST"));
     }

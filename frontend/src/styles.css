@@ -55,6 +55,8 @@ a { color: var(--primary); }
   padding: calc(0.6rem + env(safe-area-inset-top)) 1rem 0.6rem; background: var(--primary); color: var(--primary-text);
 }
 .topbar-title { font-weight: 600; }
+.topbar .badge { margin-left: auto; }
+.content > .stack { padding: 1rem 1rem 0; }
 .content { max-width: 720px; margin: 0 auto; }
 .page { padding: 1rem; max-width: 720px; margin: 0 auto; }
 .page.narrow { max-width: 420px; }
@@ -155,6 +157,7 @@ legend { font-weight: 600; margin-bottom: 0.5rem; }
 .badge-not-administered, .badge-cancelled { background: var(--border); color: var(--muted); }
 .badge-review-required { background: var(--error-soft); color: var(--error); }
 .badge-queued { background: var(--warn-soft); color: var(--warn); border: 1px dashed var(--warn); }
+.badge-error { background: var(--error-soft); color: var(--error); }
 .badge-t-active { background: var(--ok-soft); color: var(--ok); }
 .badge-t-draft, .badge-t-suspended { background: var(--warn-soft); color: var(--warn); }
 .badge-t-ended { background: var(--border); color: var(--muted); }

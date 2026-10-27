@@ -31,7 +31,11 @@ test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => 
   await shot(p, "3-conferir-tratamento");
   await p.getByRole("button", { name: "Salvar" }).click();
   await expect(p.getByText("Rascunho", { exact: true })).toBeVisible();
+  // Começa hoje às 00:00 e já passou uma dose: o app pergunta, sem presumir.
   await p.getByRole("button", { name: "Ativar agenda" }).click();
+  await expect(p.getByText("A dose prevista até agora já foi dada?", { exact: false })).toBeVisible();
+  await expect(p.getByRole("button", { name: "Confirmar" })).toBeDisabled();
+  await p.getByRole("radio", { name: /Não sei ou nem todas/ }).check();
   await p.getByRole("button", { name: "Confirmar" }).click();
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 

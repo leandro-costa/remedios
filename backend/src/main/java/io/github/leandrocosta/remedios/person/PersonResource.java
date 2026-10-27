@@ -27,6 +27,8 @@ public class PersonResource {
     }
 
     public record PersonRequest(
+            /** Só no cadastro: id gerado no aparelho (opcional). */
+            UUID id,
             @NotBlank @Size(max = 120) String displayName,
             LocalDate birthDate,
             UUID userId,
@@ -50,7 +52,7 @@ public class PersonResource {
 
     @POST
     public Response create(@PathParam("familyId") UUID familyId, @Valid @NotNull PersonRequest request) {
-        Person person = persons.create(familyId, request.toData());
+        Person person = persons.create(familyId, request.id(), request.toData());
         return Response.status(Response.Status.CREATED).entity(PersonView.of(person)).build();
     }
 

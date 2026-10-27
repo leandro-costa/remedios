@@ -30,6 +30,7 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | undefined | null>;
+  headers?: Record<string, string>;
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -37,7 +38,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   for (const [key, value] of Object.entries(options.query ?? {})) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   }
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   const token = await tokenProvider();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";

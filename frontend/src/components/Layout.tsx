@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
 import { useFamily } from "../session";
+import { PendingChanges, QueueBadge } from "./PendingChanges";
 
 const NAV = [
   { to: "/", label: "Hoje", icon: "◷" },
@@ -16,8 +17,10 @@ export function Layout() {
     <div className="app">
       <header className="topbar">
         <span className="topbar-title">{family.name}</span>
+        <QueueBadge familyId={family.id} />
       </header>
       <main className="content">
+        <PendingChanges familyId={family.id} />
         <Outlet />
       </main>
       <nav className="tabbar" aria-label="Navegação principal">

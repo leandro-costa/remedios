@@ -99,3 +99,42 @@ function sortedTimes(times: string[]): string[] {
 function orderedDays(days: DayOfWeek[]): DayOfWeek[] {
   return WEEKDAYS.map((d) => d.value).filter((d) => days.includes(d));
 }
+
+const JS_DAY: DayOfWeek[] = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
+function atLocal(day: Date, time: string): Date {
+  const [h, m] = hhmm(time).split(":").map(Number);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+}
+
+/**
+ * Horários previstos em [from, to), com as mesmas regras do servidor (o dia
+ * de início fixa a recorrência). Calcula no fuso deste aparelho; para uma
+ * agenda em outro fuso, devolve null.
+ */
+export function slotsBetween(rule: ScheduleRule | null, anchor: Date, from: Date, to: Date): Date[] | null {
+  if (!rule || rule.timezone !== Intl.DateTimeFormat().resolvedOptions().timeZone) return null;
+  const slots: Date[] = [];
+  const anchorDay = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  if (rule.type === "INTERVAL") {
+    const period = (rule.everyHours ?? 1) * 3600_000;
+    let at = atLocal(anchorDay, rule.firstDoseAt ?? "00:00").getTime();
+    if (from.getTime() > at) at += Math.ceil((from.getTime() - at) / period) * period;
+    for (; at < to.getTime() && slots.length < 2000; at += period) slots.push(new Date(at));
+    return slots;
+  }
+  const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 1);
+  const last = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1);
+  for (; day <= last && slots.length < 2000; day.setDate(day.getDate() + 1)) {
+    const days = Math.round((day.getTime() - anchorDay.getTime()) / 86_400_000);
+    const matches = rule.type === "DAILY"
+      ? days >= 0 && days % (rule.everyDays ?? 1) === 0
+      : (rule.daysOfWeek ?? []).includes(JS_DAY[day.getDay()]);
+    if (!matches) continue;
+    for (const time of rule.times ?? []) {
+      const at = atLocal(day, time);
+      if (at >= from && at < to) slots.push(at);
+    }
+  }
+  return slots;
+}

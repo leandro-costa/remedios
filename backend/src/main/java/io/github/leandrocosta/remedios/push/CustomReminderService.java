@@ -1,5 +1,6 @@
 package io.github.leandrocosta.remedios.push;
 
+import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.audit.AuditService;
 import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.Texts;
@@ -48,7 +49,7 @@ public class CustomReminderService {
     }
 
     @Transactional
-    public CustomReminder create(UUID familyId, UUID personId, String message, Instant remindAt, boolean notifyAll) {
+    public CustomReminder create(UUID familyId, UUID personId, UUID requestedId, String message, Instant remindAt, boolean notifyAll) {
         access.requireMember(familyId);
         Person.findInFamily(familyId, personId).orElseThrow(() -> ApiException.notFound("Pessoa"));
         String text = Texts.clean(message);
@@ -60,7 +61,7 @@ public class CustomReminderService {
             throw ApiException.unprocessable("INVALID_REMINDER", "Escolha um horário entre agora e os próximos 30 dias.");
         }
         CustomReminder r = new CustomReminder();
-        r.id = UUID.randomUUID();
+        r.id = ClientIds.choose(requestedId, id -> CustomReminder.findById(id) != null);
         r.familyId = familyId;
         r.personId = personId;
         r.createdBy = currentUser.id();

@@ -43,9 +43,67 @@ app nativo (Capacitor) com notificações locais. Detalhes em
 - **Atualização dos dados:** o app busca de novo ao abrir, ao reconectar e ao
   enviar a fila. O cursor incremental da seção 10.4 fica para quando o volume
   justificar.
-- **Alterações de tratamento offline** não são permitidas no app: precisam de
-  conexão, e uma versão desatualizada recebe `409` com a proposta mantida no
-  formulário.
+- **Tudo é gravado offline** (veja a seção abaixo). Online, uma versão
+  desatualizada continua recebendo `409`, com a proposta mantida no formulário.
+
+## Gravação offline em todo o app
+
+Regra do produto: **toda gravação é feita primeiro no aparelho, aparece na
+hora e é enviada quando houver conexão.** Antes, só doses, aferições e
+sintomas funcionavam assim.
+
+- **Uma fila só.** Cadastros, alterações, exclusões, correções e conferências
+  entram na mesma fila das doses, na ordem em que foram feitos. Cada item
+  declara o efeito na cópia local (incluir, alterar ou remover numa
+  consulta), e as telas mostram o registro com "Aguardando envio".
+- **Reenvio seguro para qualquer rota.** Cada gravação leva
+  `Idempotency-Key`. O servidor guarda a resposta da primeira execução e
+  devolve a mesma resposta nos reenvios (seção 10.1, `client_operation`). Não
+  foi preciso tratar a idempotência rota por rota.
+- **Ids gerados no aparelho** para família, pessoa, tratamento e lembrete.
+  Offline, um tratamento pode ser cadastrado para uma pessoa criada no mesmo
+  período sem conexão.
+- **Recusa na hora × recusa depois.** Se o servidor recusa com o responsável
+  na tela, o erro aparece no formulário, como antes, e a gravação sai da
+  fila. Se recusa ao sincronizar mais tarde, a gravação fica visível em
+  qualquer tela ("Não foi aceito: …"), para tentar de novo ou descartar.
+  Nada é descartado sozinho.
+- **Alteração de tratamento sobre versão antiga (seção 10.2).** Vinda da fila,
+  ela não é aplicada nem perdida: vira proposta num conflito do tratamento e
+  avisa a família. O tratamento não muda até alguém conferir: manter a versão
+  atual ou aplicar a proposta, sempre com motivo. Se ele mudar durante a
+  conferência, é preciso conferir de novo.
+- **Vigência.** Uma alteração de tratamento ativo feita offline vale a partir
+  do envio. O período sem conexão não é reescrito, pela mesma regra de nunca
+  alterar o passado registrado.
+- **Outras versões desatualizadas** (padrões da família, sintoma, dose
+  corrigida): o servidor recusa e o responsável decide de novo. São dados de
+  baixo risco, e a recusa fica visível.
+- **O que continua exigindo conexão**, por natureza:
+  - entrar na conta;
+  - criar ou entrar numa família: o convite é conferido pelo servidor, e a
+    família precisa existir lá para os outros entrarem;
+  - gerar convite: o código só vale depois de registrado;
+  - sair da família;
+  - ativar ou testar notificações;
+  - "Estou cuidando desta dose": é um aviso em tempo real; enviado depois,
+    não teria efeito.
+
+  Essas telas dizem claramente por que precisam de internet.
+
+## Doses anteriores à ativação
+
+- Um rascunho pode ser ativado com início até **30 dias** no passado (antes
+  eram 24 h), para cadastrar um tratamento já em andamento.
+- Se há doses previstas antes de agora, o app **pergunta, sem resposta
+  marcada**:
+  - todas foram dadas: cada uma é registrada no horário previsto, com nota
+    "informada ao cadastrar o tratamento" e auditoria;
+  - não sei ou nem todas: ficam em aberto, para registrar uma a uma;
+  - ignorar: a agenda começa agora.
+- O sistema não presume administração: só registra o que o responsável
+  afirmou (seção 1).
+- A família recebe um único aviso de tratamento ativado, não um por dose.
 
 ## Saúde: aferições e sintomas
 
@@ -153,8 +211,8 @@ São parâmetros operacionais, não orientação clínica.
   corridas, independentes do relógio.
 - **`PENDING` e "atrasada" são calculados** na leitura. O banco guarda
   `SCHEDULED` até haver desfecho, sem job para trocar estados.
-- **Ativação retroativa limitada a 24 h**, para registrar doses do mesmo dia
-  dadas antes do cadastro. Tratamentos ativos só mudam do presente em diante.
+- **Ativação retroativa limitada a 30 dias** (eram 24 h; veja "Doses
+  anteriores à ativação"). Tratamentos ativos só mudam do presente em diante.
 - **Uso "se necessário" (sob demanda)** ainda não é suportado: toda dose
   pertence a uma agenda.
 

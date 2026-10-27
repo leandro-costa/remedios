@@ -67,6 +67,11 @@ flowchart LR
   - [x] "estou cuidando desta dose", horário de silêncio, som/vibração, privacidade na tela bloqueada
   - [x] publicador da outbox: conflitos para todos; eventos importantes conforme a política da família
   - [x] lembretes avulsos ("medir de novo às 15:00")
+- [x] **Tudo offline** (pedido do produto)
+  - [x] toda gravação é feita no aparelho, aparece na hora e sincroniza depois
+  - [x] reenvio seguro em qualquer rota (`Idempotency-Key`, seção 10.1)
+  - [x] alteração de tratamento sobre versão antiga vai para conferência (seção 10.2)
+  - [x] ativar tratamento já em andamento: pergunta se as doses anteriores foram dadas
 - [ ] **Fase 5 — Qualidade e segurança**
 
 ### Demandas futuras

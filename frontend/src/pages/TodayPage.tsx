@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
-import type { OccurrenceView, PersonView } from "../api/types";
+import type { OccurrenceView, PersonView, TreatmentConflictView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
@@ -9,7 +9,6 @@ import { useCached } from "../hooks/useCached";
 import { useOutbox } from "../hooks/useOutbox";
 import { addDays, formatDay, formatTime, sameDay, startOfDay } from "../lib/time";
 import { useFamily, useSession } from "../session";
-import { discard, retry } from "../sync/outbox";
 
 /** Tela inicial (seção 7.1): doses do dia, por pessoa. */
 export function TodayPage() {
@@ -26,6 +25,8 @@ export function TodayPage() {
       query: { from: from.toISOString(), to: to.toISOString() },
     }));
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
+  const treatmentConflicts = useCached(`treatment-conflicts:${family.id}`, () =>
+    api<TreatmentConflictView[]>(`/families/${family.id}/treatments/conflicts`));
   const outbox = useOutbox(family.id);
   const queued = useMemo(() => new Map(outbox.filter((i) => i.occurrenceId).map((i) => [i.occurrenceId!, i])), [outbox]);
 
@@ -34,7 +35,7 @@ export function TodayPage() {
     .filter((o) => sameDay(new Date(o.scheduledAt), day))
     .filter((o) => !personId || o.person.id === personId);
   const review = (agenda.data ?? []).filter((o) => o.status === "REVIEW_REQUIRED").length;
-  const failed = outbox.filter((i) => i.state === "failed");
+  const treatmentReview = (treatmentConflicts.data ?? []).length;
   const isToday = sameDay(day, new Date());
 
   return (
@@ -49,18 +50,14 @@ export function TodayPage() {
       </div>
       {!isToday && <button className="link" onClick={() => setDay(startOfDay(new Date()))}>Voltar para hoje</button>}
 
-      {failed.map((item) => (
-        <Notice key={item.id} tone="error">
-          <strong>Um registro não foi aceito:</strong> {item.lastError?.message}
-          <div className="row">
-            <button className="btn btn-small" onClick={() => void retry(item.id)}>Tentar de novo</button>
-            <button className="btn btn-small" onClick={() => void discard(item.id)}>Descartar registro</button>
-          </div>
-        </Notice>
-      ))}
       {review > 0 && (
         <Notice tone="warn">
           <Link to="/conflitos">{review === 1 ? "1 dose precisa" : `${review} doses precisam`} de conferência →</Link>
+        </Notice>
+      )}
+      {treatmentReview > 0 && (
+        <Notice tone="warn">
+          <Link to="/conflitos">{treatmentReview === 1 ? "1 alteração de tratamento precisa" : `${treatmentReview} alterações de tratamento precisam`} de conferência →</Link>
         </Notice>
       )}
 

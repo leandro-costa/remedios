@@ -116,6 +116,30 @@ export interface TreatmentView {
   createdAt: string;
   updatedBy: string;
   updatedAt: string;
+  /** Alteração feita sem conexão aguardando conferência (seção 10.2). */
+  conflictId: string | null;
+}
+
+/** Doses previstas antes de agora, ao ativar um tratamento que começou no passado. */
+export type PastDoses = "OPEN" | "ADMINISTERED";
+
+export interface TreatmentProposal {
+  id: string;
+  action: "UPDATE" | "STATUS";
+  proposedBy: string;
+  deviceId: string;
+  baseVersion: number | null;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TreatmentConflictView {
+  id: string;
+  reason: string;
+  baseVersion: number | null;
+  createdAt: string;
+  treatment: TreatmentView;
+  proposals: TreatmentProposal[];
 }
 
 export interface RevisionView {

@@ -5,11 +5,12 @@ import type { CustomReminderView, MeasurementType, PersonView, ReferenceLineView
 import { Notice, Spinner } from "../components/Layout";
 import { MeasurementChart } from "../components/MeasurementChart";
 import { SyncStatus } from "../components/SyncStatus";
+import { isPending } from "../db/cache";
 import { useCached } from "../hooks/useCached";
 import { useHealth, type MeasurementItem, type SymptomItem } from "../hooks/useHealth";
-import { useOnline } from "../hooks/useOnline";
 import { formatMeasurement, formatNumber, INTENSITY, MEASUREMENT_TYPES, methodLabel, parseNumber, referenceFor, TYPE_ORDER } from "../lib/health";
 import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
+import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
 
 const PERIODS = [
@@ -148,7 +149,6 @@ function ReferenceEditor({ type, personId, personName, current, onDone }: {
   type: MeasurementType; personId: string; personName: string; current: ReferenceLineView | null; onDone: () => Promise<void>;
 }) {
   const family = useFamily();
-  const online = useOnline();
   const info = MEASUREMENT_TYPES[type];
   const [value, setValue] = useState(current ? formatNumber(current.value, info.decimals) : "");
   const [value2, setValue2] = useState(current?.value2 != null ? formatNumber(current.value2, info.decimals) : "");
@@ -164,9 +164,13 @@ function ReferenceEditor({ type, personId, personName, current, onDone }: {
     setBusy(true);
     setError(null);
     try {
-      await api(`/families/${family.id}/reference-lines`, {
-        method: "PUT",
-        body: { type, value: v, value2: v2, label: label.trim(), personId: scope === "person" ? personId : null },
+      const line = { type, value: v, value2: v2, label: label.trim(), personId: scope === "person" ? personId : null };
+      await mutate({
+        familyId: family.id, method: "PUT", path: `/families/${family.id}/reference-lines`, body: line,
+        label: `Linha de referência (${info.label})`,
+        // Até o servidor confirmar, a linha nova tem um id provisório.
+        effects: [{ key: `reference-lines:${family.id}`, op: "upsert", list: true,
+          value: { ...line, id: current?.id ?? `local-${crypto.randomUUID()}`, updatedAt: new Date().toISOString() } }],
       });
       await onDone();
     } catch (e) {
@@ -179,7 +183,11 @@ function ReferenceEditor({ type, personId, personName, current, onDone }: {
     if (!current) return;
     setBusy(true);
     try {
-      await api(`/families/${family.id}/reference-lines/${current.id}`, { method: "DELETE" });
+      await mutate({
+        familyId: family.id, method: "DELETE", path: `/families/${family.id}/reference-lines/${current.id}`,
+        label: `Remover linha de referência (${info.label})`,
+        effects: [{ key: `reference-lines:${family.id}`, op: "remove", id: current.id }],
+      });
       await onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -215,12 +223,11 @@ function ReferenceEditor({ type, personId, personName, current, onDone }: {
         <label className="radio"><input type="radio" checked={scope === "family"} onChange={() => setScope("family")} /> Para toda a família</label>
       </fieldset>
       <div className="row wrap">
-        <button className="btn btn-primary btn-small" disabled={busy || !online || !value.trim() || !label.trim()} onClick={() => void save()}>
+        <button className="btn btn-primary btn-small" disabled={busy || !value.trim() || !label.trim()} onClick={() => void save()}>
           Salvar referência
         </button>
-        {current && <button className="btn btn-small" disabled={busy || !online} onClick={() => void remove()}>Remover</button>}
+        {current && <button className="btn btn-small" disabled={busy} onClick={() => void remove()}>Remover</button>}
       </div>
-      {!online && <p className="muted small">Precisa de conexão.</p>}
     </div>
   );
 }
@@ -301,7 +308,6 @@ function Timeline({ measurements, symptoms, doses }: {
 /** Lembretes avulsos (ex.: "medir a temperatura de novo"), enviados por notificação. */
 function Reminders({ personId }: { personId: string }) {
   const family = useFamily();
-  const online = useOnline();
   const list = useCached(`reminders:${family.id}:${personId}`, () =>
     api<CustomReminderView[]>(`/families/${family.id}/persons/${personId}/reminders`));
   const [open, setOpen] = useState(false);
@@ -313,34 +319,39 @@ function Reminders({ personId }: { personId: string }) {
   async function create(minutes?: number) {
     setError(null);
     const remindAt = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : fromLocalInput(at);
+    const reminder = { id: crypto.randomUUID(), message: message.trim(), remindAt, notifyEveryone: everyone };
     try {
-      await api(`/families/${family.id}/persons/${personId}/reminders`, {
-        method: "POST", body: { message: message.trim(), remindAt, notifyEveryone: everyone },
+      await mutate({
+        familyId: family.id, method: "POST", path: `/families/${family.id}/persons/${personId}/reminders`, body: reminder,
+        label: `Lembrete: ${reminder.message}`,
+        effects: [{ key: `reminders:${family.id}:${personId}`, op: "upsert", list: true, value: { ...reminder, personId } }],
       });
       setOpen(false);
-      await list.reload();
     } catch (e) {
       setError(errorMessage(e));
     }
   }
   async function cancel(id: string) {
-    await api(`/families/${family.id}/reminders/${id}`, { method: "DELETE" }).catch((e) => setError(errorMessage(e)));
-    await list.reload();
+    await mutate({
+      familyId: family.id, method: "DELETE", path: `/families/${family.id}/reminders/${id}`, label: "Cancelar lembrete",
+      effects: [{ key: `reminders:${family.id}:${personId}`, op: "remove", id }],
+    }).catch((e) => setError(errorMessage(e)));
   }
 
   return (
     <section className="card stack">
       <div className="title-row">
         <h2>Lembretes</h2>
-        {!open && <button className="link small" disabled={!online} onClick={() => setOpen(true)}>+ Lembrete</button>}
+        {!open && <button className="link small" onClick={() => setOpen(true)}>+ Lembrete</button>}
       </div>
       {error && <Notice tone="error">{error}</Notice>}
       {(list.data ?? []).length > 0 && (
         <ul className="plain">
           {list.data!.map((r) => (
             <li key={r.id} className="row between">
-              <span>{formatTime(r.remindAt)} · {r.message}{r.notifyEveryone ? " (todos)" : ""}</span>
-              <button className="btn btn-small" disabled={!online} onClick={() => void cancel(r.id)}>Cancelar</button>
+              <span>{formatTime(r.remindAt)} · {r.message}{r.notifyEveryone ? " (todos)" : ""}
+                {isPending(r) && <span className="badge badge-queued">Aguardando envio</span>}</span>
+              <button className="btn btn-small" onClick={() => void cancel(r.id)}>Cancelar</button>
             </li>
           ))}
         </ul>

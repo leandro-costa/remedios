@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { errorMessage } from "../api/client";
-import { cached } from "../db/cache";
+import { errorMessage, OfflineError } from "../api/client";
+import { applyLocal, cached } from "../db/cache";
+import { db } from "../db/db";
 import { onOutboxChange } from "../sync/outbox";
 
 export interface CachedState<T> {
@@ -13,8 +14,9 @@ export interface CachedState<T> {
 }
 
 /**
- * Lê da API com cópia offline. Recarrega quando a fila de registros muda
- * (ex.: um registro offline foi enviado).
+ * Lê da API com cópia offline e aplica por cima as gravações deste aparelho
+ * ainda não enviadas (o que foi feito offline aparece na hora). Recarrega
+ * quando a fila muda (ex.: um registro offline foi enviado).
  */
 export function useCached<T>(key: string | null, fetcher: () => Promise<T>): CachedState<T> {
   const [state, setState] = useState<Omit<CachedState<T>, "reload">>({
@@ -28,8 +30,17 @@ export function useCached<T>(key: string | null, fetcher: () => Promise<T>): Cac
     setState((s) => ({ ...s, loading: true }));
     try {
       const result = await cached(key, () => fetcherRef.current());
-      setState({ data: result.data, fresh: result.fresh, savedAt: result.savedAt, loading: false, error: null });
+      const items = await db.outbox.orderBy("createdAt").toArray();
+      setState({ data: applyLocal(key, result.data, items), fresh: result.fresh, savedAt: result.savedAt, loading: false, error: null });
     } catch (error) {
+      if (error instanceof OfflineError) {
+        // Nada guardado desta consulta, mas pode haver um cadastro feito offline.
+        const local = applyLocal<T>(key, undefined, await db.outbox.orderBy("createdAt").toArray());
+        if (local !== undefined) {
+          setState({ data: local, fresh: false, savedAt: null, loading: false, error: null });
+          return;
+        }
+      }
       setState((s) => ({ ...s, loading: false, error: errorMessage(error) }));
     }
   }, [key]);

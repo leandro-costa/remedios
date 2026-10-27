@@ -106,6 +106,7 @@ public class OutboxPublisher {
                     "DOSE_CONFLICT_RESOLVED" -> dose(e, uuid(p.get("occurrenceId")));
             case "TREATMENT_CREATED", "TREATMENT_UPDATED", "TREATMENT_STATUS_CHANGED" ->
                 treatment(e, uuid(p.get("treatmentId")));
+            case "TREATMENT_CONFLICT_OPENED" -> treatmentConflict(e, uuid(p.get("treatmentId")));
             case "MEMBER_JOINED", "MEMBER_REMOVED" -> member(e, uuid(p.get("userId")));
             default -> List.of();
         };
@@ -197,6 +198,21 @@ public class OutboxPublisher {
                 .map(u -> new Notice(u, "Tratamento atualizado", who + " " + verb + ": " + t.name + " (" + person.displayName + ")",
                         who + " " + verb + " um tratamento.", "treatment-" + t.id, "/tratamentos/" + t.id, false,
                         PushService.Urgency.NORMAL))
+                .toList();
+    }
+
+    /** Alteração de tratamento preservada para conferência: avisa todos (seção 6.2.9). */
+    private List<Notice> treatmentConflict(OutboxEvent e, UUID treatmentId) {
+        Treatment t = Treatment.findById(treatmentId);
+        if (t == null) {
+            return List.of();
+        }
+        Person person = Person.findById(t.personId);
+        return notifier.members(e.familyId).stream()
+                .map(u -> new Notice(u, "Alteração para conferir", "Confira o tratamento " + t.name + " ("
+                        + person.displayName + "): há uma alteração feita sem conexão.",
+                        "Um tratamento tem uma alteração feita sem conexão para conferir.", "treatment-" + t.id,
+                        "/conflitos", false, PushService.Urgency.HIGH))
                 .toList();
     }
 

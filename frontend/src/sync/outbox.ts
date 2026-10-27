@@ -1,12 +1,14 @@
 import { api, ApiError, OfflineError } from "../api/client";
 import type { OccurrenceView } from "../api/types";
-import { db, type OutboxItem, type ReportKind } from "../db/db";
+import { db, type Effect, type OutboxItem, type ReportKind } from "../db/db";
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
 let running: Promise<void> | null = null;
 /** Resultado de cada envio, lido por quem está esperando aquele registro. */
 const results = new Map<string, SubmitResult>();
+/** Erro original de um envio imediato que falhou (para a tela tratar como antes). */
+const causes = new Map<string, unknown>();
 const waiting = new Set<string>();
 
 function settle(id: string, result: SubmitResult) {
@@ -38,6 +40,61 @@ export type SubmitResult =
   | { state: "synced"; result: unknown }
   | { state: "queued" }
   | { state: "failed"; error: { code: string; message: string } };
+
+/** Qualquer gravação além de doses, aferições e sintomas (cadastros, alterações, exclusões). */
+export interface Mutation {
+  familyId: string;
+  method: "POST" | "PUT" | "DELETE";
+  path: string;
+  body?: Record<string, unknown>;
+  /** Campos acrescentados só quando o envio não é imediato (ex.: preservar conflito). */
+  queuedBody?: Record<string, unknown>;
+  /** Descrição para o responsável, caso o envio seja recusado mais tarde. */
+  label: string;
+  /** Registro afetado (ex.: a dose corrigida). */
+  entityId?: string;
+  /** Como a gravação aparece na cópia local até ser confirmada. */
+  effects?: Effect[];
+}
+
+/** Resultado de {@link mutate}: a resposta do servidor ou "na fila". */
+export type Mutated<T> = { queued: false; data: T } | { queued: true; data?: undefined };
+
+/**
+ * Grava primeiro no aparelho e tenta enviar. Online, devolve a resposta do
+ * servidor; offline, devolve {@code queued: true} e a gravação fica na fila,
+ * já visível nas telas pelos efeitos locais. Se o servidor recusar na hora,
+ * o erro chega a quem está na tela (como uma chamada direta) e a gravação
+ * sai da fila; recusas posteriores ficam visíveis para tentar de novo ou
+ * descartar.
+ */
+export async function mutate<T = unknown>(m: Mutation): Promise<Mutated<T>> {
+  const item: OutboxItem = {
+    id: crypto.randomUUID(),
+    familyId: m.familyId,
+    kind: "MUTATION",
+    method: m.method,
+    path: m.path,
+    // A marca de "aguardando envio" da cópia local nunca vai ao servidor.
+    body: Object.fromEntries(Object.entries(m.body ?? {}).filter(([k]) => k !== "_pending")),
+    queuedBody: m.queuedBody,
+    label: m.label,
+    entityId: m.entityId,
+    effects: m.effects ?? [],
+    createdAt: 0,
+    attempts: 0,
+    state: "pending",
+  };
+  const result = await enqueue(item);
+  const cause = causes.get(item.id);
+  causes.delete(item.id);
+  if (result.state === "failed") {
+    await db.outbox.delete(item.id);
+    notify();
+    throw cause ?? new ApiError(422, result.error.code, result.error.message, null);
+  }
+  return result.state === "synced" ? { queued: false, data: result.result as T } : { queued: true };
+}
 
 /**
  * Registra uma dose primeiro no aparelho e depois tenta enviar. Online, o
@@ -106,7 +163,7 @@ async function enqueue(item: OutboxItem): Promise<SubmitResult> {
   if (result) return result;
   const stored = await db.outbox.get(item.id);
   return stored?.state === "failed" && stored.lastError
-    ? { state: "failed", error: stored.lastError }
+    ? { state: "failed", error: { code: stored.lastError.code, message: stored.lastError.message } }
     : { state: "queued" };
 }
 
@@ -124,6 +181,18 @@ async function store(item: OutboxItem) {
 }
 
 async function send(item: OutboxItem): Promise<unknown> {
+  if (item.kind === "MUTATION") {
+    // Envio imediato, com o responsável na tela: o pedido como foi feito.
+    // Envio posterior (fila): com os campos de fila (ex.: preservar conflito).
+    const immediate = waiting.has(item.id) && item.attempts === 0 && !item.lastError;
+    const body = immediate ? item.body : { ...item.body, ...item.queuedBody };
+    const empty = Object.keys(body).length === 0;
+    return api(item.path, {
+      method: item.method ?? "POST",
+      body: item.method === "DELETE" && empty ? undefined : body,
+      headers: { "Idempotency-Key": item.id },
+    });
+  }
   // Doses levam operationId; aferições e sintomas já levam o próprio id no corpo.
   const dose = item.kind === "ADMINISTER" || item.kind === "NOT_ADMINISTERED";
   return api<OccurrenceView>(item.path, { method: "POST", body: dose ? { ...item.body, operationId: item.id } : item.body });
@@ -148,10 +217,11 @@ export function flush(): Promise<void> {
         if (error instanceof OfflineError) break;
         if (error instanceof ApiError && error.status === 401) break;
         const lastError = error instanceof ApiError
-          ? { code: error.code, message: error.message }
+          ? { code: error.code, message: error.message, status: error.status, details: error.details }
           : { code: "UNKNOWN", message: "Falha ao enviar o registro." };
         await db.outbox.update(item.id, { state: "failed", attempts: item.attempts + 1, lastError });
-        settle(item.id, { state: "failed", error: lastError });
+        if (waiting.has(item.id)) causes.set(item.id, error);
+        settle(item.id, { state: "failed", error: { code: lastError.code, message: lastError.message } });
       }
     }
   };
@@ -176,7 +246,7 @@ export async function discard(id: string) {
 
 /** Tenta de novo um registro que falhou. */
 export async function retry(id: string) {
-  await db.outbox.update(id, { state: "pending", lastError: undefined });
+  await db.outbox.update(id, { state: "pending" });
   notify();
   await flush();
 }

@@ -9,7 +9,8 @@ import { useOnline } from "../hooks/useOnline";
 import { TREATMENT_KIND } from "../lib/labels";
 import { describeSchedule, emptyScheduleForm, formFromRule, ruleFromForm, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
 import { deviceTimezone, formatDate, fromLocalInput, startOfDay, toLocalInput } from "../lib/time";
-import { useFamily } from "../session";
+import { mutate } from "../sync/outbox";
+import { useFamily, useSession } from "../session";
 
 interface Form {
   personId: string;
@@ -49,8 +50,11 @@ export function TreatmentFormPage() {
   const family = useFamily();
   const navigate = useNavigate();
   const online = useOnline();
+  const { me, deviceId } = useSession();
   const editing = Boolean(id);
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
+  // A versão guardada no aparelho serve de base também sem conexão.
+  const stored = useCached(id ? `treatment:${id}` : null, () => api<TreatmentView>(`/families/${family.id}/treatments/${id}`));
   const [current, setCurrent] = useState<TreatmentView | null>(null);
   const [form, setForm] = useState<Form>(emptyForm);
   const [reviewing, setReviewing] = useState(false);
@@ -59,11 +63,11 @@ export function TreatmentFormPage() {
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    api<TreatmentView>(`/families/${family.id}/treatments/${id}`)
-      .then((t) => { setCurrent(t); setForm(formFrom(t)); })
-      .catch((e) => setError(errorMessage(e)));
-  }, [id, family.id]);
+    if (!stored.data || current) return;
+    setCurrent(stored.data);
+    setForm(formFrom(stored.data));
+  }, [stored.data, current]);
+  useEffect(() => { if (stored.error && !stored.data) setError(stored.error); }, [stored.error, stored.data]);
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   if (editing && !current && !error) return <Spinner />;
@@ -88,13 +92,35 @@ export function TreatmentFormPage() {
     };
     try {
       if (current) {
-        await api(`/families/${family.id}/treatments/${current.id}`, {
-          method: "PUT",
+        // Fila offline: se outro responsável alterar antes do envio, a
+        // alteração fica preservada para conferência (seção 10.2).
+        await mutate({
+          familyId: family.id, method: "PUT", path: `/families/${family.id}/treatments/${current.id}`,
           body: { ...body, baseVersion: current.version, effectiveFrom: fromLocalInput(form.effectiveFrom), reason: form.reason.trim() || null },
+          queuedBody: { preserveConflict: true, deviceId },
+          label: `Alteração do tratamento ${body.name}`,
+          effects: [
+            { key: `treatment:${current.id}`, op: "merge", value: { ...body, version: current.version + 1 } },
+            { key: `treatments:${family.id}`, op: "merge", id: current.id, value: { ...body, version: current.version + 1 } },
+          ],
         });
         navigate(`/tratamentos/${current.id}`, { replace: true });
       } else {
-        const created = await api<TreatmentView>(`/families/${family.id}/treatments`, { method: "POST", body: { ...body, personId: form.personId } });
+        // Id gerado aqui: o tratamento já pode ser aberto e ativado offline.
+        const now = new Date().toISOString();
+        const created: TreatmentView = {
+          ...body, id: crypto.randomUUID(), personId: form.personId, status: "DRAFT", version: 1, conflictId: null,
+          createdBy: me?.id ?? "", createdAt: now, updatedBy: me?.id ?? "", updatedAt: now,
+        };
+        await mutate({
+          familyId: family.id, method: "POST", path: `/families/${family.id}/treatments`,
+          body: { ...body, id: created.id, personId: form.personId },
+          label: `Novo tratamento: ${body.name}`,
+          effects: [
+            { key: `treatment:${created.id}`, op: "upsert", value: { ...created } },
+            { key: `treatments:${family.id}`, op: "upsert", value: { ...created }, list: true },
+          ],
+        });
         navigate(`/tratamentos/${created.id}`, { replace: true });
       }
     } catch (e) {
@@ -124,11 +150,12 @@ export function TreatmentFormPage() {
           <dt>Término</dt><dd>{form.endAt ? formatDate(fromLocalInput(form.endAt)) : "Sem término"}</dd>
           {current && (<><dt>Vale a partir de</dt><dd>{new Date(form.effectiveFrom).toLocaleString("pt-BR")}</dd></>)}
         </dl>
+        {!online && <Notice tone="warn">Sem conexão: fica guardado neste aparelho e é enviado quando a conexão voltar.</Notice>}
         {current?.status === "ACTIVE" && (
           <Notice>Se a agenda, o início ou o término mudaram, as doses futuras ainda não registradas serão recalculadas. Doses passadas e registros não mudam.</Notice>
         )}
         <div className="row">
-          <button className="btn btn-primary" disabled={busy || !online} onClick={() => void save()}>Salvar</button>
+          <button className="btn btn-primary" disabled={busy} onClick={() => void save()}>Salvar</button>
           <button className="btn" onClick={() => setReviewing(false)}>Voltar e editar</button>
         </div>
       </div>
@@ -138,13 +165,14 @@ export function TreatmentFormPage() {
   return (
     <form className="page stack" onSubmit={review}>
       <h1>{editing ? "Alterar tratamento" : "Novo tratamento"}</h1>
-      {!online && <Notice tone="warn">Cadastrar e alterar tratamentos precisa de conexão.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       {stale && (
         <Notice tone="warn">
           Outro responsável alterou este tratamento. Sua proposta continua no formulário; recarregue a versão atual para comparar.
           <button type="button" className="btn btn-small" onClick={() => {
-            void api<TreatmentView>(`/families/${family.id}/treatments/${id}`).then((t) => { setCurrent(t); setStale(false); setError(null); });
+            void api<TreatmentView>(`/families/${family.id}/treatments/${id}`)
+              .then((t) => { setCurrent(t); setStale(false); setError(null); })
+              .catch((e) => setError(errorMessage(e)));
           }}>Usar a versão atual como base</button>
         </Notice>
       )}
@@ -209,7 +237,7 @@ export function TreatmentFormPage() {
         </>
       )}
       <div className="row">
-        <button className="btn btn-primary" disabled={!online}>Conferir</button>
+        <button className="btn btn-primary">Conferir</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>
     </form>

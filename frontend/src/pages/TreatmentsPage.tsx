@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { PersonView, TreatmentStatus, TreatmentView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
-import { useOnline } from "../hooks/useOnline";
+import { isPending } from "../db/cache";
 import { TREATMENT_STATUS } from "../lib/labels";
 import { describeSchedule } from "../lib/schedule";
 import { useFamily, useSession } from "../session";
@@ -21,7 +21,6 @@ const FILTERS: { value: TreatmentStatus | "ALL"; label: string }[] = [
 export function TreatmentsPage() {
   const family = useFamily();
   const { me } = useSession();
-  const online = useOnline();
   const [filter, setFilter] = useState<TreatmentStatus | "ALL">("ALL");
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
@@ -35,7 +34,7 @@ export function TreatmentsPage() {
     <div className="page">
       <div className="title-row">
         <h1>Tratamentos</h1>
-        {online && <Link to="/tratamentos/novo" className="btn btn-primary btn-small" aria-label="Novo tratamento">+ Novo</Link>}
+        <Link to="/tratamentos/novo" className="btn btn-primary btn-small" aria-label="Novo tratamento">+ Novo</Link>
       </div>
       {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
       <div className="chips" role="group" aria-label="Filtrar por situação">
@@ -55,6 +54,8 @@ export function TreatmentsPage() {
                 <Link to={`/tratamentos/${t.id}`} className="card card-link">
                   <strong>{t.name}</strong>
                   <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
+                  {isPending(t) && <span className="badge badge-queued">Aguardando envio</span>}
+                  {t.conflictId && <span className="badge badge-error">Para conferir</span>}
                   <span className="muted small">{t.prescribedDose} · {describeSchedule(t.schedule)}</span>
                 </Link>
               </li>

@@ -20,7 +20,7 @@ import java.util.UUID;
 @Authenticated
 public class CustomReminderResource {
 
-    public record CreateReminder(@NotBlank @Size(max = 300) String message, @NotNull Instant remindAt, Boolean notifyEveryone) {
+    public record CreateReminder(UUID id, @NotBlank @Size(max = 300) String message, @NotNull Instant remindAt, Boolean notifyEveryone) {
     }
 
     public record ReminderView(UUID id, UUID personId, String message, Instant remindAt, boolean notifyEveryone, UUID createdBy) {
@@ -45,7 +45,7 @@ public class CustomReminderResource {
     @Path("/persons/{personId}/reminders")
     public ReminderView create(@PathParam("familyId") UUID familyId, @PathParam("personId") UUID personId,
             @Valid @NotNull CreateReminder r) {
-        return ReminderView.of(reminders.create(familyId, personId, r.message(), r.remindAt(),
+        return ReminderView.of(reminders.create(familyId, personId, r.id(), r.message(), r.remindAt(),
                 Boolean.TRUE.equals(r.notifyEveryone())));
     }
 
