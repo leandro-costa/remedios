@@ -54,10 +54,16 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await p.getByRole("button", { name: "Salvar referência" }).click();
   await expect(p.getByText("37,8 °C · Orientação do pediatra")).toBeVisible();
 
-  // Tocar num ponto mostra o valor e a última dose antes dele
-  const marker = await p.locator(".chart .marker-1").nth(1).boundingBox();
-  await p.mouse.move(marker!.x + marker!.width / 2, marker!.y + marker!.height / 2);
-  await expect(p.locator(".tooltip")).toContainText("38,1 °C");
+  // Tocar num ponto mostra o valor e a última dose antes dele. Espera a fila
+  // enviar a referência (a tela recarrega os dados e pode se reorganizar) e
+  // repete o gesto se o gráfico mudou de lugar no meio dele.
+  await expect(p.locator(".topbar")).not.toContainText("aguardando envio");
+  await expect(async () => {
+    const marker = await p.locator(".chart .marker-1").nth(1).boundingBox();
+    await p.mouse.move(0, 0);
+    await p.mouse.move(marker!.x + marker!.width / 2, marker!.y + marker!.height / 2);
+    await expect(p.locator(".tooltip")).toContainText("38,1 °C", { timeout: 1_000 });
+  }).toPass();
   await expect(p.locator(".tooltip")).toContainText("Última dose antes: Antitérmico");
   await shot(p, "6-grafico-temperatura");
 
