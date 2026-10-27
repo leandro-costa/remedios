@@ -56,6 +56,8 @@ a { color: var(--primary); }
 }
 .topbar-title { font-weight: 600; }
 .topbar .badge { margin-left: auto; }
+/* Altura fixa: o selo da fila aparece e some sem empurrar a tela. */
+.topbar { min-height: calc(2.75rem + env(safe-area-inset-top)); }
 .content > .stack { padding: 1rem 1rem 0; }
 .content { max-width: 720px; margin: 0 auto; }
 .page { padding: 1rem; max-width: 720px; margin: 0 auto; }
