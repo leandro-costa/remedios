@@ -20,6 +20,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # Falha com vulnerabilidade alta ou crítica nas dependências do app (fase 5).
+      - name: Auditoria das dependências
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm test
       - name: Build de produção (Firebase) sem a chave de teste
@@ -40,6 +43,10 @@ jobs:
         run: scripts/vapid-keys.sh >> "$GITHUB_ENV"
       - run: docker compose up -d --build --wait postgres api web
       - run: docker compose run --rm e2e
+      # Backup e restauração (fase 5): com os dados criados pelo e2e, copia o
+      # banco, restaura num banco separado e confere tabela por tabela.
+      - name: Teste de restauração do backup
+        run: scripts/restore-test.sh --exigir-dados
       - if: failure()
         run: docker compose logs api web
       - if: always()

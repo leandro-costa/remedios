@@ -16,8 +16,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-remedios}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-remedios}
       POSTGRES_DB: remedios
+    # Só nesta máquina: o banco nunca fica exposto à rede.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18+ guarda os dados em /var/lib/postgresql/<versão>.
       - postgres-data:/var/lib/postgresql
@@ -49,8 +50,9 @@ services:
       REMEDIOS_VAPID_SUBJECT: ${REMEDIOS_VAPID_SUBJECT:-mailto:admin@localhost}
     volumes:
       - ./backend/src/test/resources/publicKey.pem:/run/keys/test-public.pem:ro
+    # Só nesta máquina: de fora, a API é acessada pelo web (mesma origem).
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "127.0.0.1:${API_PORT:-8080}:8080"
     healthcheck:
       # O Quarkus só abre a porta depois das migrações e da inicialização.
       test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8080"]

@@ -4,3 +4,5 @@ target/
 .vscode/
 .DS_Store
 .env
+# Cópias de segurança do banco (dados de saúde): nunca no repositório.
+backups/

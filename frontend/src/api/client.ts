@@ -53,7 +53,8 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   } catch {
     throw new OfflineError();
   }
-  if (response.status === 502 || response.status === 503 || response.status === 504) {
+  // Servidor indisponível ou limite de pedidos: temporário, a fila tenta de novo depois.
+  if (response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504) {
     throw new OfflineError();
   }
   if (response.status === 204) return undefined as T;

@@ -39,6 +39,8 @@ registro devolve `409 ID_IN_USE`.
 | HTTP | `code` | Quando |
 | --- | --- | --- |
 | 400 | — | corpo inválido (validação de campos) |
+| 413 | — | corpo maior que 256 KB |
+| 429 | — | limite de pedidos por endereço (nginx); temporário, o app tenta de novo |
 | 403 | `FORBIDDEN` | ação restrita a administradores |
 | 404 | `NOT_FOUND` | recurso inexistente ou fora da família do usuário |
 | 409 | `STALE_VERSION` | versão-base desatualizada; nada foi aplicado |
@@ -93,6 +95,19 @@ registro devolve `409 ID_IN_USE`.
 O código do convite só é devolvido na criação; o servidor guarda apenas seu
 hash SHA-256. Convites são de uso único e expiram em 7 dias
 (`remedios.invitation.ttl`).
+
+## Exportação dos dados (LGPD)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/families/{f}/export` | só administradores: arquivo JSON com tudo o que a família registrou |
+
+O arquivo traz a família, os padrões e os membros, as pessoas, os
+tratamentos e suas versões, as doses até agora com as administrações (inclusive
+as invalidadas por correção), as aferições, os sintomas, as linhas de
+referência, os lembretes e a trilha de auditoria. Cada exportação fica
+registrada na auditoria (`FAMILY_EXPORTED`). Resposta com `Content-Disposition:
+attachment` e `Cache-Control: no-store`.
 
 ## Pessoas
 
