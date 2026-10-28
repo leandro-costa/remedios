@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
 import { useFamily } from "../session";
+import { Icon, Mark, type IconName } from "./Icon";
 import { PendingChanges, QueueBadge } from "./PendingChanges";
 
-const NAV = [
-  { to: "/", label: "Hoje", icon: "◷" },
-  { to: "/tratamentos", label: "Tratamentos", icon: "℞" },
-  { to: "/saude", label: "Saúde", icon: "♡" },
-  { to: "/historico", label: "Histórico", icon: "☰" },
-  { to: "/familia", label: "Família", icon: "⌂" },
+const NAV: { to: string; label: string; icon: IconName }[] = [
+  { to: "/", label: "Hoje", icon: "home" },
+  { to: "/tratamentos", label: "Tratamentos", icon: "pill" },
+  { to: "/saude", label: "Saúde", icon: "heart" },
+  { to: "/historico", label: "Histórico", icon: "history" },
+  { to: "/familia", label: "Família", icon: "family" },
 ];
 
 export function Layout() {
@@ -16,6 +17,7 @@ export function Layout() {
   return (
     <div className="app">
       <header className="topbar">
+        <Mark className="topbar-mark" />
         <span className="topbar-title">{family.name}</span>
         <QueueBadge familyId={family.id} />
       </header>
@@ -26,7 +28,7 @@ export function Layout() {
       <nav className="tabbar" aria-label="Navegação principal">
         {NAV.map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to === "/"} className="tab">
-            <span className="tab-icon" aria-hidden="true">{item.icon}</span>
+            <Icon name={item.icon} />
             <span>{item.label}</span>
           </NavLink>
         ))}

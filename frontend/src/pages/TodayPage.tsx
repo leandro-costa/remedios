@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
+import { Icon } from "../components/Icon";
+import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
@@ -37,18 +39,50 @@ export function TodayPage() {
   const review = (agenda.data ?? []).filter((o) => o.status === "REVIEW_REQUIRED").length;
   const treatmentReview = (treatmentConflicts.data ?? []).length;
   const isToday = sameDay(day, new Date());
+  // Progresso do dia: doses dadas (inclui as registradas aqui e ainda não enviadas).
+  const counted = doses.filter((o) => o.status !== "CANCELLED");
+  const given = counted.filter((o) => o.status === "ADMINISTERED"
+    || (queued.get(o.id)?.state === "pending" && queued.get(o.id)?.kind === "ADMINISTER")).length;
+  const open = (o: OccurrenceView) => (o.status === "PENDING" || o.status === "SCHEDULED") && !queued.has(o.id);
+  const next = isToday ? doses.filter(open).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] : undefined;
 
   return (
     <div className="page">
-      <div className="day-header">
-        <button className="icon-btn" aria-label="Dia anterior" onClick={() => setDay(addDays(day, -1))}>‹</button>
-        <div>
-          <h1>{isToday ? "Hoje" : "Dia"} · {formatDay(day)}</h1>
-          <SyncStatus familyId={family.id} fresh={agenda.fresh} savedAt={agenda.savedAt} />
+      <section className="hero">
+        <div className="hero-top">
+          <div className="hero-day">
+            <div className="row">
+              <button className="icon-btn" aria-label="Dia anterior" onClick={() => setDay(addDays(day, -1))}>‹</button>
+              <h1>{isToday ? "Hoje" : "Dia"} · {formatDay(day)}</h1>
+              <button className="icon-btn" aria-label="Próximo dia" onClick={() => setDay(addDays(day, 1))}>›</button>
+            </div>
+            <SyncStatus familyId={family.id} fresh={agenda.fresh} savedAt={agenda.savedAt} />
+            {!isToday && <button className="link" onClick={() => setDay(startOfDay(new Date()))}>Voltar para hoje</button>}
+          </div>
+          {counted.length > 0 && <ProgressRing done={given} total={counted.length} />}
         </div>
-        <button className="icon-btn" aria-label="Próximo dia" onClick={() => setDay(addDays(day, 1))}>›</button>
-      </div>
-      {!isToday && <button className="link" onClick={() => setDay(startOfDay(new Date()))}>Voltar para hoje</button>}
+        {next && (
+          <div className="next-dose">
+            <div className="row between">
+              <span className="eyebrow">Próxima dose</span>
+              <StatusBadge status={next.status} late={next.late} />
+            </div>
+            <div className="next-dose-main">
+              <span className="pill-icon"><Icon name="pill" size={26} /></span>
+              <span className="dose-main">
+                <strong className="next-dose-name">{next.treatment.name} · {formatTime(next.scheduledAt)}</strong>
+                <span className="muted">
+                  {mine.has(next.person.id) ? "Você" : next.person.displayName} · {next.treatment.prescribedDose}
+                </span>
+              </span>
+            </div>
+            <Link to={`/doses/${next.id}`} state={{ occurrence: next }} className="btn btn-primary"
+              aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${mine.has(next.person.id) ? "você" : next.person.displayName}`}>
+              Abrir dose
+            </Link>
+          </div>
+        )}
+      </section>
 
       {review > 0 && (
         <Notice tone="warn">
