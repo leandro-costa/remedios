@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
 import { Icon } from "../components/Icon";
+import { canRecordOnTime, OnTimeDialog } from "../components/OnTimeDialog";
 import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
@@ -18,6 +19,7 @@ export function TodayPage() {
   const { me } = useSession();
   const [day, setDay] = useState(() => startOfDay(new Date()));
   const [personId, setPersonId] = useState<string | null>(null);
+  const [onTime, setOnTime] = useState<OccurrenceView | null>(null);
 
   // Busca de um dia antes a três depois: a cópia offline cobre os próximos dias.
   const from = addDays(day, -1);
@@ -44,6 +46,9 @@ export function TodayPage() {
   const given = counted.filter((o) => o.status === "ADMINISTERED"
     || (queued.get(o.id)?.state === "pending" && queued.get(o.id)?.kind === "ADMINISTER")).length;
   const open = (o: OccurrenceView) => (o.status === "PENDING" || o.status === "SCHEDULED") && !queued.has(o.id);
+  const who = (o: OccurrenceView) => (mine.has(o.person.id) ? "você" : o.person.displayName);
+  const onTimeLabel = (o: OccurrenceView) =>
+    `Dada no horário: ${o.treatment.name} de ${who(o)} às ${formatTime(o.scheduledAt)}`;
   const next = isToday ? doses.filter(open).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] : undefined;
 
   return (
@@ -76,10 +81,18 @@ export function TodayPage() {
                 </span>
               </span>
             </div>
-            <Link to={`/doses/${next.id}`} state={{ occurrence: next }} className="btn btn-primary"
-              aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${mine.has(next.person.id) ? "você" : next.person.displayName}`}>
-              Abrir dose
-            </Link>
+            <div className={canRecordOnTime(next, false) ? "next-dose-actions" : "stack"}>
+              {canRecordOnTime(next, false) && (
+                <button className="btn btn-primary" aria-label={onTimeLabel(next)} onClick={() => setOnTime(next)}>
+                  <Icon name="check" />Dada no horário
+                </button>
+              )}
+              <Link to={`/doses/${next.id}`} state={{ occurrence: next }}
+                className={`btn ${canRecordOnTime(next, false) ? "" : "btn-primary"}`}
+                aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${who(next)}`}>
+                Abrir dose
+              </Link>
+            </div>
           </div>
         )}
       </section>
@@ -119,9 +132,11 @@ export function TodayPage() {
         {doses.map((o) => {
           const pending = queued.get(o.id);
           const open = o.status === "PENDING" || o.status === "SCHEDULED";
+          const quick = canRecordOnTime(o, !!pending);
           return (
-            <li key={o.id}>
-              <Link to={`/doses/${o.id}`} state={{ occurrence: o }} className={`dose ${o.late && !pending ? "dose-late" : ""}`}>
+            <li key={o.id} className="dose-row">
+              <Link to={`/doses/${o.id}`} state={{ occurrence: o }}
+                className={`dose ${o.late && !pending ? "dose-late" : ""} ${quick ? "dose-has-quick" : ""}`}>
                 <span className="dose-time">{formatTime(o.scheduledAt)}</span>
                 <span className="dose-main">
                   <strong>{mine.has(o.person.id) ? "Você" : o.person.displayName}</strong>
@@ -138,10 +153,16 @@ export function TodayPage() {
                   {open && !pending && <span className="btn btn-small btn-primary">Registrar</span>}
                 </span>
               </Link>
+              {quick && (
+                <button className="btn btn-small dose-quick" aria-label={onTimeLabel(o)} onClick={() => setOnTime(o)}>
+                  <Icon name="check" />Dada no horário
+                </button>
+              )}
             </li>
           );
         })}
       </ul>
+      {onTime && <OnTimeDialog occurrence={onTime} who={who(onTime)} onClose={() => setOnTime(null)} />}
     </div>
   );
 }

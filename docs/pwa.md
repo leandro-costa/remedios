@@ -25,9 +25,15 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | --- | --- | --- | --- |
 | ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) | ![Pessoa aguardando envio](telas/9-pessoa-offline.png) | ![Pergunta das doses anteriores](telas/10-doses-anteriores.png) |
 
-| Lembrar daqui a pouco |
-| --- |
-| ![Lembrete adiado, aguardando envio](telas/12-lembrar-depois.png) |
+| Lembrar daqui a pouco | Dada no horário |
+| --- | --- |
+| ![Lembrete adiado, aguardando envio](telas/12-lembrar-depois.png) | ![Confirmação de dose dada no horário](telas/13-dada-no-horario.png) |
+
+**Dada no horário:** na tela Hoje, a dose em aberto cujo horário já chegou
+tem o botão **Dada no horário** (no cartão "Próxima dose" e na lista). Ele
+abre uma confirmação com pessoa, medicamento, dose e horário; ao confirmar,
+registra a administração com o horário previsto, como qualquer registro de
+dose (offline, fica "Aguardando envio"). Se foi em outro horário, abra a dose.
 
 Ao ativar um tratamento que começou no passado, o app pergunta se as doses
 anteriores foram dadas, sem resposta marcada: registrar todas no horário
