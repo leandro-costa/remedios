@@ -46,6 +46,11 @@ test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => 
   await shot(p, "1-hoje");
   await first.click();
   await expect(p.getByRole("button", { name: "Confirmar administração" })).toBeVisible();
+  // Atalho: preenche o horário previsto, e a pessoa ainda confirma.
+  const planned = p.getByRole("button", { name: `No horário previsto (${T_MINUS_60})` });
+  await planned.click();
+  await expect(planned).toHaveAttribute("aria-pressed", "true");
+  await expect(p.getByLabel("Horário efetivo")).toHaveValue(new RegExp(`T${T_MINUS_60}$`));
   await shot(p, "2-dose");
   await p.getByRole("button", { name: "Confirmar administração" }).click();
   await expect(p.getByRole("link", { name: new RegExp(T_MINUS_60) })).toContainText("Administrada");

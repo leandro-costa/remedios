@@ -114,6 +114,9 @@ function RecordForm({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
   const family = useFamily();
   const { deviceId } = useSession();
   const [at, setAt] = useState(() => toLocalInput(new Date()));
+  // Atalho para quem deu no horário: preenche o campo, mas o registro continua
+  // sendo confirmado pela pessoa. Só aparece quando o horário previsto já passou.
+  const planned = new Date(occurrence.scheduledAt) <= new Date() ? toLocalInput(new Date(occurrence.scheduledAt)) : null;
   const [notes, setNotes] = useState("");
   const [notGiven, setNotGiven] = useState(false);
   const [reason, setReason] = useState("");
@@ -157,6 +160,17 @@ function RecordForm({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
         Horário efetivo
         <input type="datetime-local" value={at} max={toLocalInput(new Date())} onChange={(e) => setAt(e.target.value)} />
       </label>
+      {planned && (
+        <div className="chips" role="group" aria-label="Atalhos de horário">
+          <button type="button" className={`chip${at === planned ? " chip-on" : ""}`} aria-pressed={at === planned}
+            onClick={() => setAt(planned)}>
+            No horário previsto ({formatTime(occurrence.scheduledAt)})
+          </button>
+          <button type="button" className="chip" onClick={() => setAt(toLocalInput(new Date()))}>
+            Agora
+          </button>
+        </div>
+      )}
       <label>
         Observações <span className="muted small">(opcional)</span>
         <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
