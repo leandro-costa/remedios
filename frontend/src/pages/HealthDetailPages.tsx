@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { Intensity, MeasurementView, SymptomView, TreatmentView } from "../api/types";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
@@ -51,8 +52,7 @@ export function MeasurementDetailPage() {
 
   return (
     <div className="page">
-      <button className="link back" onClick={() => navigate(-1)}>← Voltar</button>
-      <h1>{m.type === "OTHER" ? m.label : info.label}</h1>
+      <ScreenBar title={(m.type === "OTHER" ? m.label : null) ?? info.label} />
       {error && <Notice tone="error">{error}</Notice>}
       <dl className="facts card">
         <dt>Valor</dt><dd className="big">{formatMeasurement(m)}</dd>
@@ -155,8 +155,7 @@ export function SymptomDetailPage() {
 
   return (
     <div className="page">
-      <button className="link back" onClick={() => navigate(-1)}>← Voltar</button>
-      <h1>{s.description}</h1>
+      <ScreenBar title={s.description} />
       {error && <Notice tone="error">{error}</Notice>}
       <dl className="facts card">
         <dt>Início</dt><dd>{formatWhen(s.startedAt)}</dd>

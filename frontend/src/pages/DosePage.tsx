@@ -38,17 +38,27 @@ export function DosePage() {
 
   return (
     <div className="page">
-      <button className="link back" onClick={() => navigate(-1)}>← Voltar</button>
-      <h1>Dose</h1>
+      <header className="screen-bar">
+        <button className="round-btn light" aria-label="Voltar" onClick={() => navigate(-1)}><Icon name="back" /></button>
+        <h1 className="screen-bar-title">Dose</h1>
+        <span className="screen-bar-spacer" />
+      </header>
       {!detail.fresh && <Notice tone="warn">Sem conexão: estes dados podem estar desatualizados.</Notice>}
 
-      <dl className="facts card">
-        <dt>Pessoa</dt><dd>{occurrence.person.displayName}</dd>
-        <dt>Medicamento</dt><dd>{occurrence.treatment.name}</dd>
-        <dt>Horário previsto</dt><dd>{formatWhen(occurrence.scheduledAt)}</dd>
-        <dt>Dose</dt><dd>{occurrence.treatment.prescribedDose} <span className="muted small">(conforme cadastro)</span></dd>
-        {occurrence.treatment.route && (<><dt>Via</dt><dd>{occurrence.treatment.route}</dd></>)}
-        <dt>Situação</dt><dd><StatusBadge status={occurrence.status} late={occurrence.late} queued={!!queued} /></dd>
+      <section className="dose-hero" aria-label="Dose prevista">
+        <span className="dose-hero-icon"><Icon name="pill" size={44} /></span>
+        <strong className="dose-hero-name">{occurrence.treatment.name}</strong>
+        <span className="muted">{occurrence.person.displayName}</span>
+        <span className="row wrap dose-hero-chips">
+          <span className="time-chip"><Icon name="clock" />{formatWhen(occurrence.scheduledAt)}</span>
+          <StatusBadge status={occurrence.status} late={occurrence.late} queued={!!queued} />
+        </span>
+      </section>
+
+      <dl className="facts-list">
+        <div><dt>Horário previsto</dt><dd>{formatWhen(occurrence.scheduledAt)}</dd></div>
+        <div><dt>Dose</dt><dd>{occurrence.treatment.prescribedDose} <span className="muted small">(conforme cadastro)</span></dd></div>
+        {occurrence.treatment.route && <div><dt>Via</dt><dd>{occurrence.treatment.route}</dd></div>}
       </dl>
 
       {queued && (
@@ -61,8 +71,8 @@ export function DosePage() {
       {change && (
         <Notice tone="warn">{change.label} guardada neste aparelho. Será enviada quando houver conexão.</Notice>
       )}
-      {open && !queued && <Claim occurrence={occurrence} onChange={() => void detail.reload()} />}
       {open && !queued && <RecordForm occurrence={occurrence} onDone={() => navigate("/")} />}
+      {open && !queued && <Claim occurrence={occurrence} onChange={() => void detail.reload()} />}
       {open && !queued && <Snooze occurrence={occurrence} pending={snooze} onChange={() => void detail.reload()} />}
       {open && !queued && (
         <section className="card stack">
@@ -253,7 +263,7 @@ function RecordForm({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
         <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
       </label>
       <button className="btn btn-primary btn-big" disabled={busy || !at} onClick={() => void report("ADMINISTER")}>
-        Confirmar administração
+        <Icon name="check" size={22} />Confirmar administração
       </button>
       {notGiven ? (
         <div className="stack">

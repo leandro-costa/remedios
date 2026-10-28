@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { activate, localTime, newUser, run } from "./helpers";
+import { activate, localTime, newUser, run, shot } from "./helpers";
 
 /** Regras WCAG 2.1 níveis A e AA, mais as da 2.2 AA (ex.: tamanho dos alvos de toque). */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -33,6 +33,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   }
   await expect(login.getByLabel("Seu nome")).toBeVisible();
   await audit(login, "Entrar", problems);
+  await shot(login, "q-entrar");
   await context.close();
 
   const ana = await newUser(browser, `Ana A ${run}`);
@@ -48,6 +49,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
   await expect(p.getByRole("listitem").filter({ hasText: "Gabriel" })).not.toContainText("Aguardando envio");
   await audit(p, "Família", problems);
+  await shot(p, "q-familia");
 
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
@@ -65,8 +67,10 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
   await audit(p, "Tratamento", problems);
+  await shot(p, "q-tratamento");
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await audit(p, "Tratamentos", problems);
+  await shot(p, "q-tratamentos");
 
   await p.getByRole("link", { name: "Hoje" }).click();
   await expect(p.getByRole("link", { name: new RegExp(T_MINUS_60) })).toBeVisible();
@@ -79,6 +83,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await expect(p.getByRole("button", { name: "Confirmar administração" })).toBeVisible();
   await audit(p, "Dose", problems);
   await p.getByRole("button", { name: "Confirmar administração" }).click();
+  await expect(p.getByRole("heading", { name: "Hoje" })).toBeVisible();
 
   await p.getByRole("link", { name: "Saúde" }).click();
   await audit(p, "Saúde", problems);
@@ -90,6 +95,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
 
   await p.getByRole("link", { name: "Histórico" }).click();
   await audit(p, "Histórico", problems);
+  await shot(p, "q-historico");
   await p.goto("/conflitos");
   await expect(p.getByRole("heading", { name: "Para conferir" })).toBeVisible();
   await audit(p, "Para conferir", problems);
@@ -110,6 +116,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   for (const [screen, link] of [["Hoje", "Hoje"], ["Tratamentos", "Tratamentos"], ["Saúde", "Saúde"], ["Família", "Família"]]) {
     await p.getByRole("link", { name: link, exact: true }).click();
     await audit(p, `${screen} (tema escuro)`, problems);
+    await shot(p, `q-escuro-${link}`);
   }
 
   expect(problems, problems.join("\n")).toEqual([]);

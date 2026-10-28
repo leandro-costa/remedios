@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import type { Intensity, PersonView, TreatmentView } from "../api/types";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { INTENSITY, SYMPTOM_SUGGESTIONS } from "../lib/health";
@@ -57,7 +58,7 @@ export function SymptomFormPage() {
   const personTreatments = (treatments.data ?? []).filter((t) => t.personId === personId && t.status !== "DRAFT");
   return (
     <form className="page stack" onSubmit={(e) => void submit(e)}>
-      <h1>Novo sintoma{person ? ` · ${person.displayName}` : ""}</h1>
+      <ScreenBar title={`Novo sintoma${person ? ` · ${person.displayName}` : ""}`} />
       {error && <Notice tone="error">{error}</Notice>}
       {(persons.data?.length ?? 0) > 1 && (
         <label>

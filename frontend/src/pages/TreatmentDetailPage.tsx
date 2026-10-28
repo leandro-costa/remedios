@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { PastDoses, RevisionView, TreatmentStatus, TreatmentView } from "../api/types";
+import { Icon } from "../components/Icon";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { TREATMENT_KIND, TREATMENT_STATUS } from "../lib/labels";
@@ -92,11 +94,12 @@ export function TreatmentDetailPage() {
 
   return (
     <div className="page">
-      <button className="link back" onClick={() => navigate("/tratamentos")}>← Tratamentos</button>
-      <div className="title-row">
-        <h1>{t.name}</h1>
+      <ScreenBar title={t.name} onBack={() => navigate("/tratamentos")} />
+      <section className="dose-hero">
+        <span className="dose-hero-icon"><Icon name="pill" size={44} /></span>
+        <strong className="dose-hero-name">{t.name}</strong>
         <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
-      </div>
+      </section>
       {!treatment.fresh && <Notice tone="warn">Sem conexão: dados guardados neste aparelho. Alterações ficam guardadas e são enviadas quando a conexão voltar.</Notice>}
       {isPending(t) && <Notice tone="warn">Alteração aguardando envio. As doses aparecem depois que o servidor confirmar.</Notice>}
       {t.conflictId && (

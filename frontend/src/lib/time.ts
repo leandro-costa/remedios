@@ -27,6 +27,18 @@ export function formatDay(date: Date): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** "Terça, 28 de outubro" */
+export function formatLongDay(date: Date): string {
+  const text = date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" }).replace("-feira", "");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** "Bom dia", "Boa tarde" ou "Boa noite", pela hora do aparelho. */
+export function greeting(now = new Date()): string {
+  const h = now.getHours();
+  return h >= 5 && h < 12 ? "Bom dia" : h >= 12 && h < 18 ? "Boa tarde" : "Boa noite";
+}
+
 /** "Hoje · 08:05", "Ontem · 20:10", "20/10 · 08:00" */
 export function formatWhen(iso: string, now = new Date()): string {
   const date = new Date(iso);

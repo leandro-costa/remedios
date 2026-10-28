@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { CustomReminderView, MeasurementType, PersonView, ReferenceLineView } from "../api/types";
+import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
+import { PageHeader } from "../components/PageHeader";
 import { MeasurementChart } from "../components/MeasurementChart";
 import { SyncStatus } from "../components/SyncStatus";
 import { isPending } from "../db/cache";
@@ -36,7 +38,7 @@ export function HealthPage() {
   const person = persons.data?.find((p) => p.id === personId);
 
   if (persons.data && persons.data.length === 0) {
-    return <div className="page"><h1>Saúde</h1><p className="empty">Cadastre as pessoas acompanhadas na aba Família.</p></div>;
+    return <div className="page"><PageHeader title="Saúde" /><p className="empty">Cadastre as pessoas acompanhadas na aba Família.</p></div>;
   }
 
   const types = TYPE_ORDER.filter((t) => t !== "OTHER" && (health.measurements.some((m) => m.type === t) || referenceFor(health.lines, personId ?? "", t)));
@@ -46,7 +48,8 @@ export function HealthPage() {
 
   return (
     <div className="page">
-      <h1>Saúde</h1>
+      <PageHeader title="Saúde" subtitle={person
+        ? `Aferições e sintomas de ${person.userId && person.userId === me?.id ? "você" : person.displayName}` : undefined} />
       <SyncStatus familyId={family.id} fresh={health.fresh} savedAt={health.savedAt} />
 
       <div className="chips" role="group" aria-label="Pessoa">
@@ -58,7 +61,7 @@ export function HealthPage() {
       </div>
 
       {personId && (
-        <div className="row wrap">
+        <div className="grid-2">
           <Link className="btn btn-primary" to={`/saude/aferir?pessoa=${personId}`}>+ Aferição</Link>
           <Link className="btn" to={`/saude/sintoma?pessoa=${personId}`}>+ Sintoma</Link>
         </div>
@@ -75,9 +78,9 @@ export function HealthPage() {
       {health.loading && <Spinner />}
 
       {ongoing.length > 0 && (
-        <section className="card">
-          <h2>Sintomas em andamento</h2>
-          <ul className="plain">
+        <section>
+          <h2 className="section-title">Sintomas em andamento</h2>
+          <ul className="cards">
             {ongoing.map((s) => <SymptomLine key={s.id} symptom={s} />)}
           </ul>
         </section>
@@ -125,17 +128,25 @@ function ChartCard(props: {
   const info = MEASUREMENT_TYPES[props.type];
   const line = referenceFor(props.lines, props.personId, props.type);
   const [editing, setEditing] = useState(false);
+  const last = [...props.points].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0];
   return (
     <section className="card">
       <div className="title-row">
         <h2>{info.label} ({info.unit})</h2>
-        <button className="link small" onClick={() => setEditing(!editing)}>{line ? "Referência" : "+ Referência"}</button>
+        {last && <span className="muted small">última {formatTime(last.measuredAt)}</span>}
       </div>
+      {last && (
+        <p className="latest">
+          <span className="latest-value">{formatMeasurement(last)}</span>
+          {methodLabel(last.type, last.method) && <span className="muted small">{methodLabel(last.type, last.method)}</span>}
+        </p>
+      )}
       {props.points.length > 0 ? (
         <MeasurementChart title={info.label} unit={info.unit} decimals={info.decimals} from={props.from} to={props.to}
           points={props.points.map(point)} doses={props.doses} seriesLabels={info.pair}
           reference={line && { value: line.value, value2: line.value2, label: line.label }} />
       ) : <p className="muted small">Nenhuma aferição neste período.</p>}
+      <button className="link small" onClick={() => setEditing(!editing)}>{line ? "Linha de referência" : "+ Linha de referência"}</button>
       {editing && (
         <ReferenceEditor type={props.type} personId={props.personId} personName={props.personName} current={line}
           onDone={async () => { setEditing(false); await props.onLinesChanged(); }} />
@@ -235,13 +246,21 @@ function ReferenceEditor({ type, personId, personName, current, onDone }: {
 function SymptomLine({ symptom }: { symptom: SymptomItem }) {
   const content = (
     <>
-      <strong>{symptom.description}</strong>
-      {symptom.intensity && <span className="muted"> · {INTENSITY[symptom.intensity]}</span>}
-      <span className="muted small"> · desde {formatWhen(symptom.startedAt)}</span>
-      {symptom.pending && <span className="badge badge-queued">Aguardando envio</span>}
+      <span className="tile tile-review"><Icon name="note" /></span>
+      <span className="item-main">
+        <strong>{symptom.description}{symptom.intensity ? ` · ${INTENSITY[symptom.intensity]}` : ""}</strong>
+        <span className="muted small">Em andamento desde {formatWhen(symptom.startedAt)}</span>
+        {symptom.pending && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+      </span>
+      {!symptom.pending && <span className="item-chevron"><Icon name="chevron" /></span>}
     </>
   );
-  return <li>{symptom.pending ? content : <Link to={`/saude/sintomas/${symptom.id}`} state={{ symptom }} className="plain-link">{content}</Link>}</li>;
+  return (
+    <li>
+      {symptom.pending ? <div className="item">{content}</div>
+        : <Link to={`/saude/sintomas/${symptom.id}`} state={{ symptom }} className="item">{content}</Link>}
+    </li>
+  );
 }
 
 interface Entry {

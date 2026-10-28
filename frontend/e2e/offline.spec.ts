@@ -19,7 +19,7 @@ test("cadastros offline aparecem na hora e sincronizam ao voltar a conexão", as
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
   const lia = p.getByRole("listitem").filter({ hasText: "Lia" });
   await expect(lia).toContainText("Aguardando envio");
-  await expect(p.locator(".topbar")).toContainText("1 aguardando envio");
+  await expect(p.locator(".queue-float")).toContainText("1 aguardando envio");
   await shot(p, "9-pessoa-offline");
 
   // Ainda offline: tratamento para a pessoa recém-cadastrada, começando ontem
@@ -44,11 +44,11 @@ test("cadastros offline aparecem na hora e sincronizam ao voltar a conexão", as
   await shot(p, "10-doses-anteriores");
   await p.getByRole("button", { name: "Confirmar" }).click();
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  await expect(p.locator(".topbar")).toContainText("3 aguardando envio");
+  await expect(p.locator(".queue-float")).toContainText("3 aguardando envio");
 
   // Conexão de volta: tudo é enviado na ordem, e a dose anterior aparece como dada
   await goOnline(ana.context, p);
-  await expect(p.locator(".topbar")).not.toContainText("aguardando envio", { timeout: 15_000 });
+  await expect(p.locator(".queue-float")).not.toContainText("aguardando envio", { timeout: 15_000 });
   await p.getByRole("link", { name: "Hoje" }).click();
   await expect(p.getByRole("link", { name: new RegExp(T_MINUS_60) })).toContainText("Administrada");
   await expect(p.getByText("Sincronizado")).toBeVisible();

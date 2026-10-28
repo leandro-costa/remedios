@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import type { PersonView, TreatmentStatus, TreatmentView } from "../api/types";
+import { Avatar } from "../components/Avatar";
+import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
+import { PageHeader } from "../components/PageHeader";
 import { useCached } from "../hooks/useCached";
 import { isPending } from "../db/cache";
 import { TREATMENT_STATUS } from "../lib/labels";
@@ -32,10 +35,8 @@ export function TreatmentsPage() {
 
   return (
     <div className="page">
-      <div className="title-row">
-        <h1>Tratamentos</h1>
-        <Link to="/tratamentos/novo" className="btn btn-primary btn-small" aria-label="Novo tratamento">+ Novo</Link>
-      </div>
+      <PageHeader title="Tratamentos" subtitle="Medicamentos e horários de cada pessoa"
+        action={<Link to="/tratamentos/novo" className="round-btn" aria-label="Novo tratamento" title="Novo tratamento"><Icon name="plus" /></Link>} />
       {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
       <div className="chips" role="group" aria-label="Filtrar por situação">
         {FILTERS.map((f) => (
@@ -47,16 +48,25 @@ export function TreatmentsPage() {
       {treatments.data && groups.length === 0 && <p className="empty">Nenhum tratamento {filter === "ALL" ? "cadastrado" : "nesta situação"}.</p>}
       {groups.map((g) => (
         <section key={g.person.id}>
-          <h2 className="group-title">{g.person.userId && g.person.userId === me?.id ? "Você" : g.person.displayName}</h2>
+          <h2 className="group-head">
+            <Avatar name={g.person.displayName} id={g.person.id} size={32} />
+            {g.person.userId && g.person.userId === me?.id ? "Você" : g.person.displayName}
+          </h2>
           <ul className="cards">
             {g.items.map((t) => (
               <li key={t.id}>
-                <Link to={`/tratamentos/${t.id}`} className="card card-link">
-                  <strong>{t.name}</strong>
-                  <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
-                  {isPending(t) && <span className="badge badge-queued">Aguardando envio</span>}
-                  {t.conflictId && <span className="badge badge-error">Para conferir</span>}
-                  <span className="muted small">{t.prescribedDose} · {describeSchedule(t.schedule)}</span>
+                <Link to={`/tratamentos/${t.id}`} className="item">
+                  <span className="tile"><Icon name="pill" /></span>
+                  <span className="item-main">
+                    <strong className="item-title">{t.name}</strong>
+                    <span className="muted small">{t.prescribedDose} · {describeSchedule(t.schedule)}</span>
+                    <span className="row wrap">
+                      <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
+                      {isPending(t) && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+                      {t.conflictId && <span className="badge badge-review-required"><Icon name="review" />Para conferir</span>}
+                    </span>
+                  </span>
+                  <span className="item-chevron"><Icon name="chevron" /></span>
                 </Link>
               </li>
             ))}

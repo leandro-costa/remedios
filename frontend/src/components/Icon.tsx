@@ -11,6 +11,13 @@ const PATHS = {
   review: <path d="M7 7h10M7 12h10M7 17h6" />,
   sync: <path d="M4 12a8 8 0 0114-5M20 12a8 8 0 01-14 5M18 3v4h-4M6 21v-4h4" />,
   x: <path d="M7 7l10 10M17 7L7 17" />,
+  bell: <path d="M6 16V11a6 6 0 0112 0v5l2 2H4zM10 21h4" />,
+  back: <path d="M15 5l-7 7 7 7" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  chevron: <path d="M9 5l7 7-7 7" />,
+  thermo: <><path d="M10 14V5a2 2 0 014 0v9a4 4 0 11-4 0z" /><path d="M12 9v7" /></>,
+  note: <path d="M7 7h10M7 12h10M7 17h6" />,
+  calendar: <><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M4 10h16M9 3v4M15 3v4" /></>,
 } as const;
 
 export type IconName = keyof typeof PATHS;
