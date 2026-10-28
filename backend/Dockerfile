@@ -13,5 +13,5 @@ FROM eclipse-temurin:27_35-jre
 WORKDIR /app
 COPY --from=build --chown=1001:1001 /src/target/quarkus-app/ ./
 USER 1001
-EXPOSE 8080
+EXPOSE 8010
 ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]

@@ -45,12 +45,12 @@ export default defineConfig(({ mode }) => {
   ],
   server: {
     port: 5173,
-    proxy: { "/api": "http://localhost:8080" },
+    proxy: { "/api": "http://localhost:8010" },
     fs: { allow: [".", "../backend/src/test/resources"] },
   },
   preview: {
     port: 4173,
-    proxy: { "/api": "http://localhost:8080" },
+    proxy: { "/api": "http://localhost:8010" },
   },
   test: {
     environment: "node",

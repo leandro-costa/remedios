@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Ponta a ponta: o PWA (build no modo local) contra a API de verdade.
-// Local:  API em :8080 no modo local (veja docs/pwa.md) e `npm run e2e`.
+// Local:  API em :8010 no modo local (veja docs/pwa.md) e `npm run e2e`.
 // CI:     o serviço `e2e` do compose roda isto contra o serviço `web`.
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:4173";
 

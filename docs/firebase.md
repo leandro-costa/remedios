@@ -91,7 +91,7 @@ REMEDIOS_JWT_PUBLICKEY_LOCATION=/run/keys/test-public.pem
 docker compose up -d --build
 # Para a API direto (curl); no app, use também VITE_AUTH_MODE=local (docs/pwa.md).
 TOKEN=$(scripts/token-local.sh ana "Ana")
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8010/api/me
 ```
 
 Nesse modo, a API registra um aviso no log ao subir. **Nunca use em produção:**
