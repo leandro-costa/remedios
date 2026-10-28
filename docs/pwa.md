@@ -9,7 +9,7 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | Tela | Rota | O que faz |
 | --- | --- | --- |
 | Hoje | `/` | doses do dia por pessoa, estado de sincronização, atalho para registrar |
-| Dose | `/doses/:id` | conferir e registrar administração (com atalho "No horário previsto") ou "não foi dada", corrigir, revisar conflitos, trilha |
+| Dose | `/doses/:id` | conferir e registrar administração (com atalho "No horário previsto") ou "não foi dada", "Lembrar daqui a pouco", atalho para mudar os horários do tratamento, corrigir, revisar conflitos, trilha |
 | Tratamentos | `/tratamentos` | lista por pessoa e situação; cadastro e alteração com editor de agenda e conferência |
 | Histórico | `/historico` | filtros por pessoa, tratamento, período e responsável |
 | Família | `/familia` | membros e convites, pessoas, padrões da família, preferências, aparelhos, conta |
@@ -24,6 +24,10 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | Gráfico de temperatura | Saúde | Pessoa cadastrada offline | Doses anteriores |
 | --- | --- | --- | --- |
 | ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) | ![Pessoa aguardando envio](telas/9-pessoa-offline.png) | ![Pergunta das doses anteriores](telas/10-doses-anteriores.png) |
+
+| Lembrar daqui a pouco |
+| --- |
+| ![Lembrete adiado, aguardando envio](telas/12-lembrar-depois.png) |
 
 Ao ativar um tratamento que começou no passado, o app pergunta se as doses
 anteriores foram dadas, sem resposta marcada: registrar todas no horário

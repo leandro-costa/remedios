@@ -266,3 +266,17 @@ ou dose. As preferências pessoais começam com `lock_screen_details = false`
   sincronização.
 - `administration_record.device_id` é obrigatório. Registros feitos fora de um
   dispositivo cadastrado vão exigir um dispositivo lógico ou uma migração.
+
+## "Lembrar daqui a pouco" e mudança de horários
+
+- **Adiar é só do lembrete, e só de quem pede.** A dose não é reagendada: ela
+  continua no horário previsto, fica atrasada depois da tolerância e a
+  trilha não muda. Reagendar uma dose deslocaria o histórico e poderia
+  sugerir compensação de atraso, o que a especificação proíbe (6.2, item 12).
+- **As próximas doses não mudam.** Quem precisa mudar os horários de vez usa
+  o atalho **Mudar horários do tratamento**, que abre a alteração do
+  tratamento com conferência, data de vigência e motivo.
+- **Funciona offline:** a hora do lembrete é calculada no aparelho e vai pela
+  fila. Se chegar ao servidor depois da hora escolhida, ou com a dose já
+  decidida, não há o que adiar e nada muda.
+- **Limite de 12 horas** por adiamento.

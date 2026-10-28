@@ -52,6 +52,10 @@ public class OccurrenceResource {
             UUID deviceId) {
     }
 
+    /** "Lembrar daqui a pouco": quando lembrar de novo (calculado no aparelho, que pode estar offline). */
+    public record Snooze(@NotNull Instant remindAt) {
+    }
+
     private final OccurrenceService occurrences;
     private final OccurrenceViews views;
 
@@ -115,6 +119,21 @@ public class OccurrenceResource {
     public OccurrenceView releaseClaim(@PathParam("familyId") UUID familyId,
             @PathParam("occurrenceId") UUID occurrenceId) {
         return views.of(List.of(occurrences.releaseClaim(familyId, occurrenceId))).getFirst();
+    }
+
+    /** Adia só o lembrete desta dose para quem pediu; o horário da dose não muda. */
+    @jakarta.ws.rs.PUT
+    @Path("/occurrences/{occurrenceId}/snooze")
+    public OccurrenceView snooze(@PathParam("familyId") UUID familyId, @PathParam("occurrenceId") UUID occurrenceId,
+            @Valid @NotNull Snooze s) {
+        return views.of(List.of(occurrences.snooze(familyId, occurrenceId, s.remindAt()))).getFirst();
+    }
+
+    @jakarta.ws.rs.DELETE
+    @Path("/occurrences/{occurrenceId}/snooze")
+    public OccurrenceView cancelSnooze(@PathParam("familyId") UUID familyId,
+            @PathParam("occurrenceId") UUID occurrenceId) {
+        return views.of(List.of(occurrences.cancelSnooze(familyId, occurrenceId))).getFirst();
     }
 
     /** Decisão humana sobre uma dose com registros divergentes (seção 10.3). */

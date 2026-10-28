@@ -2,6 +2,7 @@ package io.github.leandrocosta.remedios;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -164,6 +165,49 @@ class NotificationTest {
         reminders.tick(soon);
         assertEquals(0, anaPhone.take().stream().filter(m -> ("dose-" + soonDose).equals(m.get("tag"))).count());
         assertEquals(1, brunoPhone.take().stream().filter(m -> ("dose-" + soonDose).equals(m.get("tag"))).count());
+    }
+
+    @Test
+    void snoozeDelaysOnlyTheRemindersOfWhoAskedAndNotTheDose() throws Exception {
+        Instant later = at.plus(30, ChronoUnit.MINUTES);
+        d.ana.req().body(Map.of("remindAt", later.toString()))
+                .put("/api/families/{f}/occurrences/{o}/snooze", d.family, dose).then().statusCode(200)
+                .body("remindAt", notNullValue());
+        d.bruno.req().get("/api/families/{f}/occurrences/{o}", d.family, dose).then().statusCode(200)
+                .body("occurrence.remindAt", nullValue());
+
+        reminders.tick(at);
+        assertEquals(0, anaPhone.take().size());
+        assertEquals("Hora da dose", brunoPhone.take().getFirst().get("title"));
+        reminders.tick(at.plus(15, ChronoUnit.MINUTES));
+        assertEquals(0, anaPhone.take().size());
+        brunoPhone.take();
+        reminders.tick(later);
+        assertEquals(1, anaPhone.take().size());
+        reminders.tick(later.plus(1, ChronoUnit.MINUTES));
+        assertEquals(0, anaPhone.take().size(), "o lembrete adiado vai uma vez só");
+        reminders.tick(at.plus(45, ChronoUnit.MINUTES));
+        assertEquals("Dose atrasada", anaPhone.take().getFirst().get("title"), "a agenda segue no horário original");
+
+        // Cancelar volta à agenda; adiar de novo numera outro lembrete.
+        d.ana.req().delete("/api/families/{f}/occurrences/{o}/snooze", d.family, dose).then().statusCode(200)
+                .body("remindAt", nullValue());
+        d.ana.req().body(Map.of("remindAt", Instant.now().plus(13, ChronoUnit.HOURS).toString()))
+                .put("/api/families/{f}/occurrences/{o}/snooze", d.family, dose).then().statusCode(422)
+                .body("code", equalTo("SNOOZE_TOO_LONG"));
+    }
+
+    @Test
+    void snoozeFromTheOfflineQueueAfterTheDoseWasDecidedChangesNothing() throws Exception {
+        d.bruno.req().body(Map.of("deviceId", d.brunoDevice)).post("/api/families/{f}/occurrences/{o}/administration",
+                d.family, dose).then().statusCode(200);
+        d.ana.req().body(Map.of("remindAt", at.plus(30, ChronoUnit.MINUTES).toString()))
+                .put("/api/families/{f}/occurrences/{o}/snooze", d.family, dose).then().statusCode(200)
+                .body("status", equalTo("ADMINISTERED"))
+                .body("remindAt", nullValue());
+        // Hora pedida já passou (enviado tarde pela fila): nada a adiar.
+        d.ana.req().body(Map.of("remindAt", Instant.now().minus(1, ChronoUnit.MINUTES).toString()))
+                .put("/api/families/{f}/occurrences/{o}/snooze", d.family, dose).then().statusCode(200);
     }
 
     @Test

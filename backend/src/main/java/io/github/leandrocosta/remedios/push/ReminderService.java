@@ -29,6 +29,8 @@ public class ReminderService {
     static final int SLOT_EARLY = -1;
     /** Aviso que substitui o lembrete quando a dose é decidida. */
     static final int SLOT_DONE = 1000;
+    /** Lembrete adiado ("Lembrar daqui a pouco"): 200 + número do adiamento. */
+    static final int SLOT_SNOOZE = 200;
 
     private final EntityManager em;
     private final Notifier notifier;
@@ -46,6 +48,10 @@ public class ReminderService {
     }
 
     record Slot(int number, Instant at) {
+    }
+
+    /** Lembrete adiado por um responsável; {@code times} numera o adiamento. */
+    record Snooze(Instant remindAt, int times) {
     }
 
     /** Envia os lembretes devidos até {@code now}. Seguro com várias instâncias (ver reminder_log). */
@@ -72,6 +78,23 @@ public class ReminderService {
             slots.add(new Slot(k, scheduledAt.plus(Duration.ofMinutes((long) k * interval))));
         }
         return slots;
+    }
+
+    /**
+     * Lembrete devido considerando um adiamento: até a hora pedida, nenhum
+     * lembrete da agenda é enviado; na hora, vai um lembrete próprio, e
+     * depois a agenda segue normalmente. A dose não muda de horário.
+     */
+    static Slot due(List<Slot> slots, Snooze snooze, Instant now, Duration maxDelay) {
+        if (snooze == null || snooze.remindAt() == null) {
+            return due(slots, now, maxDelay);
+        }
+        if (now.isBefore(snooze.remindAt())) {
+            return null;
+        }
+        List<Slot> all = new ArrayList<>(slots);
+        all.add(new Slot(SLOT_SNOOZE + snooze.times(), snooze.remindAt()));
+        return due(all, now, maxDelay);
     }
 
     /** O lembrete mais recente já vencido, se ainda não estiver velho demais (ex.: servidor parado). */
@@ -105,6 +128,8 @@ public class ReminderService {
                 treatments.values().stream().map(t -> t.personId).distinct().toList()).stream()
                 .collect(Collectors.toMap(p -> p.id, Function.identity()));
 
+        Map<String, Snooze> snoozes = snoozes(rows.stream().map(r -> ((DoseOccurrence) r[0]).id).toList());
+
         List<Notifier.Delivery> deliveries = new ArrayList<>();
         Map<UUID, List<UUID>> membersByFamily = new java.util.HashMap<>();
         for (Object[] row : rows) {
@@ -123,7 +148,7 @@ public class ReminderService {
             for (Map.Entry<UUID, List<PushSubscription>> entry : subscriptions.entrySet()) {
                 UUID user = entry.getKey();
                 UserNotificationSettings pref = prefs.get(user);
-                Slot slot = due(slots(o.scheduledAt, s, pref), now, maxDelay);
+                Slot slot = due(slots(o.scheduledAt, s, pref), snoozes.get(o.id + ":" + user), now, maxDelay);
                 if (slot == null) {
                     continue;
                 }
@@ -150,13 +175,29 @@ public class ReminderService {
         return deliveries;
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Snooze> snoozes(List<UUID> occurrences) {
+        List<Object[]> rows = em.createNativeQuery("""
+                SELECT dose_occurrence_id, user_id, remind_at, times FROM reminder_snooze
+                 WHERE remind_at IS NOT NULL AND dose_occurrence_id IN (:ids)
+                """, Object[].class)
+                .setParameter("ids", occurrences).getResultList();
+        Map<String, Snooze> result = new java.util.HashMap<>();
+        for (Object[] r : rows) {
+            Instant at = r[2] instanceof java.time.OffsetDateTime t ? t.toInstant() : (Instant) r[2];
+            result.put(r[0] + ":" + r[1], new Snooze(at, ((Number) r[3]).intValue()));
+        }
+        return result;
+    }
+
     private static PushMessage message(DoseOccurrence o, Slot slot, boolean late, Treatment t, Person p,
             UserNotificationSettings pref, PushSubscription sub, TreatmentSchedule s) {
         String at = Notifier.time(o.scheduledAt, sub);
+        boolean snoozed = slot.number() > SLOT_SNOOZE && slot.number() < SLOT_DONE;
         String title = switch (slot.number()) {
             case SLOT_EARLY -> "Dose em " + s.reminderBeforeMinutes + " min";
             case 0 -> "Hora da dose";
-            default -> late ? "Dose atrasada" : "Dose pendente";
+            default -> late ? "Dose atrasada" : snoozed ? "Lembrete da dose" : "Dose pendente";
         };
         // Tela bloqueada: sem nome do medicamento por padrão (seção 12).
         String body = pref.lockScreenDetails

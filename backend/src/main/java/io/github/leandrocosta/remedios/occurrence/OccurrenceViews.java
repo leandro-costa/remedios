@@ -7,6 +7,7 @@ import io.github.leandrocosta.remedios.sync.SyncConflict;
 import io.github.leandrocosta.remedios.sync.SyncConflictChange;
 import io.github.leandrocosta.remedios.treatment.Treatment;
 import io.github.leandrocosta.remedios.user.AppUser;
+import io.github.leandrocosta.remedios.user.CurrentUser;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +24,12 @@ import java.util.stream.Stream;
 /** Monta as respostas de ocorrências, carregando os dados relacionados em lote. */
 @ApplicationScoped
 public class OccurrenceViews {
+
+    private final CurrentUser currentUser;
+
+    public OccurrenceViews(CurrentUser currentUser) {
+        this.currentUser = currentUser;
+    }
 
     public record PersonRef(UUID id, String displayName) {
     }
@@ -42,11 +49,13 @@ public class OccurrenceViews {
      * {@code status}: estado da dose, com {@code PENDING} calculado para doses
      * em aberto cujo horário já chegou. {@code late}: em aberto além da
      * tolerância da agenda (classificação operacional, não orientação clínica).
+     * {@code remindAt}: lembrete adiado por quem consulta ("Lembrar daqui a
+     * pouco"); só o lembrete muda, não o horário da dose.
      */
     public record OccurrenceView(UUID id, Instant scheduledAt, DoseOccurrence.Status status, boolean late,
             long version, PersonRef person, TreatmentRef treatment, AdministrationView administration,
             String statusReason, UserRef statusChangedBy, Instant statusChangedAt, UserRef claimedBy,
-            Instant claimedUntil) {
+            Instant claimedUntil, Instant remindAt) {
     }
 
     public record TrailEntry(String eventType, UserRef actor, Instant occurredAt, String reason,
@@ -82,6 +91,7 @@ public class OccurrenceViews {
                 occurrences.stream().map(o -> o.statusChangedBy),
                 occurrences.stream().map(o -> o.claimedBy),
                 records.values().stream().map(r -> r.recordedBy)).flatMap(x -> x).toList());
+        Map<UUID, Instant> snoozes = snoozes(occurrences, now);
 
         return occurrences.stream().map(o -> {
             Treatment t = treatments.get(o.treatmentId);
@@ -97,8 +107,34 @@ public class OccurrenceViews {
                     new TreatmentRef(t.id, t.name, t.prescribedDose, t.route),
                     r == null ? null : administration(r, users),
                     o.statusReason, ref(o.statusChangedBy, users), o.statusChangedAt,
-                    claimActive(o, now) ? ref(o.claimedBy, users) : null, claimActive(o, now) ? o.claimedUntil : null);
+                    claimActive(o, now) ? ref(o.claimedBy, users) : null, claimActive(o, now) ? o.claimedUntil : null,
+                    open ? snoozes.get(o.id) : null);
         }).toList();
+    }
+
+    /** Lembretes adiados por quem consulta, ainda por vir. */
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Instant> snoozes(List<DoseOccurrence> occurrences, Instant now) {
+        if (occurrences.isEmpty()) {
+            return Map.of();
+        }
+        List<Object[]> rows = io.quarkus.hibernate.orm.panache.Panache.getEntityManager().createNativeQuery("""
+                SELECT dose_occurrence_id, remind_at FROM reminder_snooze
+                 WHERE user_id = :u AND remind_at > :now AND dose_occurrence_id IN (:ids)
+                """, Object[].class)
+                .setParameter("u", currentUser.id()).setParameter("now", now)
+                .setParameter("ids", occurrences.stream().map(o -> o.id).toList())
+                .getResultList();
+        return rows.stream().collect(Collectors.toMap(r -> (UUID) r[0], r -> toInstant(r[1])));
+    }
+
+    private static Instant toInstant(Object value) {
+        return switch (value) {
+            case Instant i -> i;
+            case java.time.OffsetDateTime t -> t.toInstant();
+            case java.sql.Timestamp t -> t.toInstant();
+            default -> throw new IllegalStateException("Data inesperada: " + value.getClass());
+        };
     }
 
     public OccurrenceDetail detail(DoseOccurrence occurrence) {

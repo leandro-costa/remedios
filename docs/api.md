@@ -301,11 +301,14 @@ administração. `OPEN` devolve a dose ao estado em aberto.
 | POST | `/api/me/push/test` | envia um aviso de teste: `{sent, failed}` |
 | POST | `/api/families/{f}/occurrences/{o}/claim` | "estou cuidando desta dose" (20 min); `409 ALREADY_CLAIMED` se outra pessoa já está |
 | DELETE | `/api/families/{f}/occurrences/{o}/claim` | libera |
+| PUT | `/api/families/{f}/occurrences/{o}/snooze` | "lembrar daqui a pouco": `{remindAt}` (até 12 h; `422 SNOOZE_TOO_LONG`). Adia só os lembretes de quem pede; o horário da dose não muda. Com a dose já decidida ou a hora já passada (envio tardio da fila), nada muda |
+| DELETE | `/api/families/{f}/occurrences/{o}/snooze` | cancela o adiamento: os lembretes da agenda seguem |
 | GET | `/api/families/{f}/persons/{p}/reminders` | lembretes avulsos pendentes |
 | POST | `/api/families/{f}/persons/{p}/reminders` | `{id?, message, remindAt, notifyEveryone?}` (até 30 dias) |
 | DELETE | `/api/families/{f}/reminders/{id}` | cancela |
 
-As doses trazem `claimedBy` e `claimedUntil` enquanto alguém estiver cuidando.
+As doses trazem `claimedBy` e `claimedUntil` enquanto alguém estiver cuidando,
+e `remindAt` quando quem consulta adiou o próprio lembrete.
 Sem chaves VAPID, as rotas de inscrição respondem `503 PUSH_NOT_CONFIGURED`.
 Funcionamento e preferências em [`notificacoes.md`](notificacoes.md).
 
