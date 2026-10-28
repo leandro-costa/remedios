@@ -32,16 +32,6 @@ psql_in() {
 work=$(mktemp -d)
 trap 'rm -rf "$work"; psql_in postgres "DROP DATABASE IF EXISTS \"$SCRATCH\" WITH (FORCE)" >/dev/null 2>&1 || true' EXIT
 
-if [[ -z "$file" ]]; then
-  file="$work/copia.dump"
-  PG_EXEC="$PG_EXEC" scripts/backup.sh "$file" >/dev/null
-fi
-
-psql_in postgres "DROP DATABASE IF EXISTS \"$SCRATCH\" WITH (FORCE)"
-psql_in postgres "CREATE DATABASE \"$SCRATCH\" OWNER \"$PGUSER\""
-# shellcheck disable=SC2086
-$PG_EXEC pg_restore -U "$PGUSER" -d "$SCRATCH" --no-owner --exit-on-error < "$file"
-
 # Impressão digital de cada tabela: quantidade de linhas e hash do conteúdo
 # em ordem estável. Igual nos dois bancos = restauração fiel.
 fingerprint='
@@ -56,7 +46,31 @@ LATERAL (
 WHERE t.table_schema = $$public$$ AND t.table_type = $$BASE TABLE$$'
 fingerprint=${fingerprint//\"/\'}
 
-psql_in "$DB" "$fingerprint" > "$work/atual.txt"
+if [[ -z "$file" ]]; then
+  # Com a API no ar, o banco pode mudar durante a cópia (ex.: o publicador de
+  # avisos marcando eventos como enviados). Vale a cópia feita sem mudança
+  # entre antes e depois; senão, tenta de novo.
+  file="$work/copia.dump"
+  for attempt in 1 2 3 4 5; do
+    psql_in "$DB" "$fingerprint" > "$work/antes.txt"
+    PG_EXEC="$PG_EXEC" scripts/backup.sh "$file" >/dev/null
+    psql_in "$DB" "$fingerprint" > "$work/atual.txt"
+    cmp -s "$work/antes.txt" "$work/atual.txt" && break
+    if [[ $attempt == 5 ]]; then
+      echo "FALHA: o banco mudou durante todas as tentativas de cópia." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+else
+  psql_in "$DB" "$fingerprint" > "$work/atual.txt"
+fi
+
+psql_in postgres "DROP DATABASE IF EXISTS \"$SCRATCH\" WITH (FORCE)"
+psql_in postgres "CREATE DATABASE \"$SCRATCH\" OWNER \"$PGUSER\""
+# shellcheck disable=SC2086
+$PG_EXEC pg_restore -U "$PGUSER" -d "$SCRATCH" --no-owner --exit-on-error < "$file"
+
 psql_in "$SCRATCH" "$fingerprint" > "$work/restaurado.txt"
 
 if ! diff -u "$work/atual.txt" "$work/restaurado.txt"; then
