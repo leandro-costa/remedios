@@ -184,6 +184,7 @@ class TreatmentTest {
         body.put("route", "oral");
         body.put("instructions", "Conforme prescrição");
         body.put("startAt", START.toString());
+        body.put("schedule", Map.of("type", "DAILY", "timezone", "America/Bahia", "times", List.of("08:00", "20:00")));
         return body;
     }
 

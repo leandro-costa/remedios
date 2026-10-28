@@ -1,12 +1,12 @@
 # Firebase Authentication
 
-O login fica a cargo do **Firebase Authentication** (Google). O app Android
+O login fica a cargo do **Firebase Authentication** (Google). O app (PWA)
 faz o login no Firebase e envia à API o **ID token** recebido. A API não
 guarda senhas: ela apenas confere o token.
 
 ```mermaid
 sequenceDiagram
-    participant App as App Android
+    participant App as App (PWA)
     participant FB as Firebase Authentication
     participant API as API Remédios
     participant G as Chaves públicas do Google
@@ -39,7 +39,7 @@ em `PUT /api/me`.
 1. Acesse <https://console.firebase.google.com> e crie um projeto (por exemplo,
    `remedios-familia`). O Google Analytics é opcional.
 2. Em **Authentication → Método de login**, ative os provedores desejados:
-   - **Google**: o mais simples no Android;
+   - **Google**: o mais simples para a família;
    - **E-mail/senha**: para quem não quer usar conta Google.
 3. Em **Configurações do projeto → Geral**, copie o **ID do projeto**.
 4. Coloque-o no `.env` da raiz:
@@ -54,16 +54,26 @@ em `PUT /api/me`.
 A API não precisa de credencial de serviço nem de arquivo JSON do Firebase:
 as chaves usadas na verificação são públicas.
 
-## No app Android (Fase 2 em diante)
+## No app (PWA)
 
 1. No console, em **Configurações do projeto → Seus apps**, adicione um app
-   Android com o pacote do aplicativo e a impressão digital SHA-1 da chave de
-   assinatura. O login com Google exige a SHA-1.
-2. Baixe o `google-services.json` para `android/app/`. Ele identifica o
-   projeto, não é segredo, mas convém não publicá-lo em repositório aberto.
-3. Use o Firebase Authentication SDK e, para cada chamada à API, obtenha o
-   token com `FirebaseAuth.getInstance().currentUser?.getIdToken(false)`. O SDK
-   renova o token automaticamente antes de vencer.
+   **Web** (`</>`). Copie `apiKey`, `authDomain` e `appId` para o `.env`:
+
+   ```bash
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=remedios-familia.firebaseapp.com
+   VITE_FIREBASE_APP_ID=...
+   ```
+
+   Esses valores identificam o projeto para o navegador e não são segredos. O
+   `projectId` vem do próprio `FIREBASE_PROJECT_ID`.
+2. Em **Authentication → Configurações → Domínios autorizados**, inclua o
+   domínio onde o app será publicado (e `localhost` para testes).
+3. Rode `docker compose up -d --build`. O serviço `web` embute essa configuração
+   no build do PWA.
+
+O SDK do Firebase renova o token sozinho antes de vencer, e o app envia o token
+em cada chamada à API.
 
 ## Desenvolvimento sem Firebase
 
@@ -79,6 +89,7 @@ REMEDIOS_JWT_PUBLICKEY_LOCATION=/run/keys/test-public.pem
 
 ```bash
 docker compose up -d --build
+# Para a API direto (curl); no app, use também VITE_AUTH_MODE=local (docs/pwa.md).
 TOKEN=$(scripts/token-local.sh ana "Ana")
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
 ```

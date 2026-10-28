@@ -1,5 +1,6 @@
 package io.github.leandrocosta.remedios.family;
 
+import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.audit.AuditService;
 import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
@@ -46,12 +47,12 @@ public class FamilyService {
     // --- Família --------------------------------------------------------------
 
     @Transactional
-    public FamilyMember create(String name) {
+    public FamilyMember create(UUID requestedId, String name) {
         UUID actor = currentUser.id();
         Instant now = Instant.now();
 
         Family family = new Family();
-        family.id = UUID.randomUUID();
+        family.id = ClientIds.choose(requestedId, id -> Family.findById(id) != null);
         family.name = name.strip();
         family.createdAt = now;
         family.persist();

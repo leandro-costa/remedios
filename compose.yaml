@@ -1,7 +1,8 @@
 # Ambiente do projeto.
 #
-#   docker compose up -d --build              banco + API em http://localhost:8080
+#   docker compose up -d --build              app em http://localhost:8000 (API em :8080)
 #   docker compose run --rm tests             testes de integração do backend
+#   docker compose run --rm e2e               testes de ponta a ponta do app (modo local)
 #   docker compose down                       para tudo (use -v para apagar os dados)
 #
 # Variáveis opcionais em .env (veja .env.example).
@@ -42,10 +43,54 @@ services:
       # Modo local sem Firebase: troque por /run/keys/test-public.pem no .env
       # e gere tokens com scripts/token-local.sh.
       REMEDIOS_JWT_PUBLICKEY_LOCATION: ${REMEDIOS_JWT_PUBLICKEY_LOCATION:-https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com}
+      # Web Push (lembretes): gere com scripts/vapid-keys.sh. Vazio = sem notificações.
+      REMEDIOS_VAPID_PUBLIC_KEY: ${REMEDIOS_VAPID_PUBLIC_KEY:-}
+      REMEDIOS_VAPID_PRIVATE_KEY: ${REMEDIOS_VAPID_PRIVATE_KEY:-}
+      REMEDIOS_VAPID_SUBJECT: ${REMEDIOS_VAPID_SUBJECT:-mailto:admin@localhost}
     volumes:
       - ./backend/src/test/resources/publicKey.pem:/run/keys/test-public.pem:ro
     ports:
       - "${API_PORT:-8080}:8080"
+    healthcheck:
+      # O Quarkus só abre a porta depois das migrações e da inicialização.
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8080"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # PWA (build estático servido pelo nginx, que repassa /api para a API).
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-firebase}
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:-}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:-}
+        VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8000}:80"
+
+  # Testes de ponta a ponta do PWA contra o serviço web (exige o modo local).
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.64.1-resolute
+    profiles: ["tools"]
+    depends_on:
+      - web
+    # Usa a rede do serviço web: o app abre em http://localhost, origem segura
+    # (exigida pelo service worker e pela Web Crypto).
+    network_mode: "service:web"
+    working_dir: /src
+    environment:
+      E2E_BASE_URL: http://localhost
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --engine-strict=false && npx playwright test"]
+    volumes:
+      - ./frontend:/src
+      - /src/node_modules
 
   tests:
     image: maven:3.10.0-eclipse-temurin-27

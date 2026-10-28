@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Authenticated
 public class FamilyResource {
 
-    public record CreateFamily(@NotBlank @Size(max = 120) String name) {
+    public record CreateFamily(UUID id, @NotBlank @Size(max = 120) String name) {
     }
 
     public record FamilyView(UUID id, String name, FamilyMember.Role myRole, Instant createdAt) {
@@ -80,7 +80,7 @@ public class FamilyResource {
 
     @POST
     public Response create(@Valid @NotNull CreateFamily request) {
-        FamilyMember member = families.create(request.name());
+        FamilyMember member = families.create(request.id(), request.name());
         Family family = Family.findById(member.familyId);
         return Response.status(Response.Status.CREATED).entity(view(family, member)).build();
     }

@@ -1,5 +1,6 @@
 package io.github.leandrocosta.remedios.person;
 
+import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.audit.AuditService;
 import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.Texts;
@@ -46,12 +47,12 @@ public class PersonService {
     }
 
     @Transactional
-    public Person create(UUID familyId, PersonData data) {
+    public Person create(UUID familyId, UUID requestedId, PersonData data) {
         access.requireMember(familyId);
         validate(familyId, null, data);
         Instant now = Instant.now();
         Person person = new Person();
-        person.id = UUID.randomUUID();
+        person.id = ClientIds.choose(requestedId, id -> Person.findById(id) != null);
         person.familyId = familyId;
         apply(person, data);
         person.createdAt = now;

@@ -1,12 +1,21 @@
 package io.github.leandrocosta.remedios.treatment;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.leandrocosta.remedios.audit.AuditService;
+import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
 import io.github.leandrocosta.remedios.person.Person;
+import io.github.leandrocosta.remedios.schedule.ScheduleRule;
+import io.github.leandrocosta.remedios.schedule.ScheduleService;
+import io.github.leandrocosta.remedios.occurrence.OccurrenceService;
+import io.github.leandrocosta.remedios.sync.SyncConflict;
+import io.github.leandrocosta.remedios.sync.SyncConflictChange;
+import io.github.leandrocosta.remedios.sync.SyncOperation;
 import io.github.leandrocosta.remedios.user.CurrentUser;
+import io.github.leandrocosta.remedios.user.DeviceService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.time.Duration;
@@ -16,12 +25,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Cadastro e versionamento de tratamentos (seções 4.5, 10.2 e 11.1). Cada
  * alteração aceita gera nova versão, revisão, auditoria e evento de outbox na
- * mesma transação. Uma versão-base desatualizada é rejeitada sem aplicar nada.
+ * mesma transação. Online, uma versão-base desatualizada é rejeitada sem aplicar
+ * nada. Vinda da fila offline, a alteração é preservada como conflito para um
+ * responsável conferir, e o tratamento não muda até a conferência (seção 10.2).
  */
 @ApplicationScoped
 public class TreatmentService {
@@ -30,22 +42,61 @@ public class TreatmentService {
 
     /** Tolerância para relógios de dispositivos ligeiramente atrasados. */
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
+    /**
+     * Ao ativar um rascunho, a agenda pode começar no máximo este tempo no
+     * passado (tratamento já em andamento quando foi cadastrado).
+     */
+    static final Duration MAX_ACTIVATION_BACKDATE = Duration.ofDays(30);
+    private static final String CONFLICT_REASON = "Alteração feita sem conexão sobre uma versão anterior do tratamento";
 
     public record TreatmentData(String name, Treatment.Kind kind, String prescribedDose, String route,
-            String instructions, Instant startAt, Instant endAt) {
+            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule) {
     }
 
     public record Change(long baseVersion, Instant effectiveFrom, String reason) {
     }
 
+    /**
+     * Alteração vinda da fila offline: o aparelho, a chave da operação e o
+     * pedido completo, guardado como proposta se houver conflito.
+     */
+    public record Offline(UUID deviceId, UUID operationKey, Map<String, Object> request) {
+    }
+
+    /** Doses anteriores a agora ao ativar um tratamento que começou no passado. */
+    public enum PastDoses {
+        /** Ficam em aberto, para registrar uma a uma. */
+        OPEN,
+        /** O responsável informou que todas foram dadas nos horários previstos. */
+        ADMINISTERED
+    }
+
+    /** Aplicada, ou preservada para conferência ({@code conflictId}). */
+    public record Outcome(Treatment treatment, UUID conflictId) {
+    }
+
+    public enum Choice { KEEP_CURRENT, ADOPT }
+
+    public record Resolution(UUID conflictId, Choice choice, UUID proposalId, long baseVersion, String reason) {
+    }
+
     private final CurrentUser currentUser;
     private final FamilyAccess access;
     private final AuditService audit;
+    private final ScheduleService schedules;
+    private final OccurrenceService occurrences;
+    private final DeviceService devices;
+    private final ObjectMapper json;
 
-    public TreatmentService(CurrentUser currentUser, FamilyAccess access, AuditService audit) {
+    public TreatmentService(CurrentUser currentUser, FamilyAccess access, AuditService audit,
+            ScheduleService schedules, OccurrenceService occurrences, DeviceService devices, ObjectMapper json) {
         this.currentUser = currentUser;
         this.access = access;
         this.audit = audit;
+        this.schedules = schedules;
+        this.occurrences = occurrences;
+        this.devices = devices;
+        this.json = json;
     }
 
     public List<Treatment> list(UUID familyId, UUID personId, Treatment.Status status) {
@@ -76,7 +127,7 @@ public class TreatmentService {
     }
 
     @Transactional
-    public Treatment create(UUID familyId, UUID personId, TreatmentData data) {
+    public Treatment create(UUID familyId, UUID requestedId, UUID personId, TreatmentData data) {
         access.requireMember(familyId);
         Person person = Person.findInFamily(familyId, personId)
                 .orElseThrow(() -> ApiException.unprocessable("PERSON_NOT_FOUND",
@@ -89,7 +140,7 @@ public class TreatmentService {
         UUID actor = currentUser.id();
         Instant now = Instant.now();
         Treatment t = new Treatment();
-        t.id = UUID.randomUUID();
+        t.id = ClientIds.choose(requestedId, id -> Treatment.findById(id) != null);
         t.familyId = familyId;
         t.personId = personId;
         apply(t, data);
@@ -110,7 +161,110 @@ public class TreatmentService {
 
     @Transactional
     public Treatment update(UUID familyId, UUID treatmentId, TreatmentData data, Change change) {
-        Treatment t = lockForChange(familyId, treatmentId, change);
+        return update(familyId, treatmentId, data, change, null).treatment();
+    }
+
+    @Transactional
+    public Outcome update(UUID familyId, UUID treatmentId, TreatmentData data, Change change, Offline offline) {
+        Treatment t = lock(familyId, treatmentId);
+        Optional<UUID> preserved = checkVersion(t, change, offline, "UPDATE");
+        if (preserved.isPresent()) {
+            return new Outcome(t, preserved.get());
+        }
+        return new Outcome(applyUpdate(t, data, effective(t, change, offline)), null);
+    }
+
+    @Transactional
+    public Treatment changeStatus(UUID familyId, UUID treatmentId, Treatment.Status target, Change change) {
+        return changeStatus(familyId, treatmentId, target, change, PastDoses.OPEN, null, null).treatment();
+    }
+
+    /**
+     * Muda a situação. Ao ativar um rascunho que começa no passado, as doses
+     * anteriores a agora ficam em aberto ou, se o responsável informar que
+     * foram todas dadas, são registradas nos horários previstos.
+     */
+    @Transactional
+    public Outcome changeStatus(UUID familyId, UUID treatmentId, Treatment.Status target, Change change,
+            PastDoses pastDoses, UUID deviceId, Offline offline) {
+        Treatment t = lock(familyId, treatmentId);
+        Optional<UUID> preserved = checkVersion(t, change, offline, "STATUS");
+        if (preserved.isPresent()) {
+            return new Outcome(t, preserved.get());
+        }
+        return new Outcome(applyStatus(t, target, effective(t, change, offline), pastDoses, deviceId), null);
+    }
+
+    /** Alterações preservadas aguardando conferência, por tratamento. */
+    public Map<UUID, UUID> openConflicts(UUID familyId) {
+        access.requireMember(familyId);
+        Map<UUID, UUID> open = new HashMap<>();
+        SyncConflict.<SyncConflict>list("familyId = ?1 and entityType = ?2 and status = ?3", familyId, TREATMENT,
+                SyncConflict.Status.OPEN).forEach(c -> open.put(c.entityId, c.id));
+        return open;
+    }
+
+    public List<SyncConflict> conflicts(UUID familyId) {
+        access.requireMember(familyId);
+        return SyncConflict.list("familyId = ?1 and entityType = ?2 and status = ?3 order by createdAt", familyId,
+                TREATMENT, SyncConflict.Status.OPEN);
+    }
+
+    /**
+     * Conferência de um conflito (seção 10.2): manter a versão atual ou
+     * aplicar uma das propostas sobre ela. Se o tratamento mudou durante a
+     * conferência, nada é feito e é preciso conferir de novo.
+     */
+    @Transactional
+    public Treatment resolve(UUID familyId, UUID treatmentId, Resolution r) {
+        Treatment t = lock(familyId, treatmentId);
+        SyncConflict conflict = SyncConflict.findOpen(TREATMENT, t.id).filter(c -> c.id.equals(r.conflictId()))
+                .orElseThrow(() -> ApiException.conflict("CONFLICT_NOT_OPEN", "Esta conferência já foi concluída."));
+        if (t.version != r.baseVersion()) {
+            throw new VersionConflictException("O tratamento", t.version);
+        }
+        String reason = Texts.clean(r.reason());
+        if (reason == null) {
+            throw ApiException.unprocessable("REASON_REQUIRED", "Informe o motivo da decisão.");
+        }
+        SyncConflictChange adopted = null;
+        if (r.choice() == Choice.ADOPT) {
+            adopted = SyncConflictChange.<SyncConflictChange>findByIdOptional(r.proposalId())
+                    .filter(c -> c.conflictId.equals(conflict.id))
+                    .orElseThrow(() -> ApiException.unprocessable("PROPOSAL_NOT_FOUND",
+                            "A proposta escolhida não faz parte desta conferência."));
+        }
+        Instant now = Instant.now();
+        Map<String, Object> resolution = new LinkedHashMap<>();
+        resolution.put("choice", r.choice().name());
+        resolution.put("proposalId", adopted == null ? null : adopted.id.toString());
+        resolution.put("reason", reason);
+        conflict.status = SyncConflict.Status.RESOLVED;
+        conflict.resolution = resolution;
+        conflict.resolvedBy = currentUser.id();
+        conflict.resolvedAt = now;
+        audit.record(familyId, currentUser.id(), TREATMENT, t.id, "TREATMENT_CONFLICT_RESOLVED", null, resolution,
+                reason);
+        if (adopted == null) {
+            return t;
+        }
+        Map<String, Object> p = adopted.proposedData;
+        // A proposta vale a partir de agora, sobre a versão atual.
+        Instant proposedFrom = p.get("effectiveFrom") == null ? now : Instant.parse((String) p.get("effectiveFrom"));
+        Instant from = t.status == Treatment.Status.DRAFT ? proposedFrom : now;
+        Change change = new Change(t.version, from, "Conferência: " + reason);
+        if ("STATUS".equals(p.get("action"))) {
+            Treatment.Status target = Treatment.Status.valueOf((String) p.get("status"));
+            PastDoses past = p.get("pastDoses") == null ? PastDoses.OPEN : PastDoses.valueOf((String) p.get("pastDoses"));
+            UUID device = p.get("deviceId") == null ? null : UUID.fromString((String) p.get("deviceId"));
+            return applyStatus(t, target, change, past, device);
+        }
+        return applyUpdate(t, json.convertValue(p, TreatmentData.class), change);
+    }
+
+    // --- Auxiliares -----------------------------------------------------------
+
+    private Treatment applyUpdate(Treatment t, TreatmentData data, Change change) {
         if (t.status == Treatment.Status.ENDED) {
             throw ApiException.conflict("TREATMENT_ENDED", "Tratamentos encerrados não podem ser alterados.");
         }
@@ -123,12 +277,20 @@ public class TreatmentService {
         if (sameContent(before, after)) {
             return t;
         }
+        if (t.status == Treatment.Status.ACTIVE) {
+            if (t.scheduleRule == null) {
+                throw scheduleRequired();
+            }
+            if (affectsSchedule(before, after)) {
+                // Só doses futuras em aberto são recalculadas; o passado fica como está.
+                restartSchedule(t, change, "Agenda alterada");
+            }
+        }
         return commitVersion(t, before, change, "TREATMENT_UPDATED");
     }
 
-    @Transactional
-    public Treatment changeStatus(UUID familyId, UUID treatmentId, Treatment.Status target, Change change) {
-        Treatment t = lockForChange(familyId, treatmentId, change);
+    private Treatment applyStatus(Treatment t, Treatment.Status target, Change change, PastDoses pastDoses,
+            UUID deviceId) {
         if (t.status == target) {
             return t;
         }
@@ -137,29 +299,159 @@ public class TreatmentService {
                     "Não é possível passar de " + t.status + " para " + target + ".");
         }
         requireEffectiveFrom(t, change);
+        if (target == Treatment.Status.ACTIVE && t.scheduleRule == null) {
+            throw scheduleRequired();
+        }
+        boolean recordPast = pastDoses == PastDoses.ADMINISTERED && t.status == Treatment.Status.DRAFT
+                && target == Treatment.Status.ACTIVE;
+        if (recordPast) {
+            devices.requireActive(deviceId);
+        }
         Map<String, Object> before = snapshot(t);
+        Treatment.Status previous = t.status;
         t.status = target;
-        return commitVersion(t, before, change, "TREATMENT_STATUS_CHANGED");
+        if (target == Treatment.Status.ACTIVE) {
+            schedules.start(t, change.effectiveFrom());
+        } else if (previous == Treatment.Status.ACTIVE) {
+            stopSchedule(t, change, target == Treatment.Status.SUSPENDED ? "Tratamento suspenso"
+                    : "Tratamento encerrado");
+        }
+        Treatment result = commitVersion(t, before, change, "TREATMENT_STATUS_CHANGED");
+        if (recordPast) {
+            occurrences.recordPastAsAdministered(t.familyId, t.id, deviceId, Instant.now());
+        }
+        return result;
     }
 
-    // --- Auxiliares -----------------------------------------------------------
-
-    private Treatment lockForChange(UUID familyId, UUID treatmentId, Change change) {
+    private Treatment lock(UUID familyId, UUID treatmentId) {
         access.requireMember(familyId);
-        Treatment t = Treatment.lockInFamily(familyId, treatmentId)
-                .orElseThrow(() -> ApiException.notFound("Tratamento"));
-        if (t.version != change.baseVersion()) {
+        return Treatment.lockInFamily(familyId, treatmentId).orElseThrow(() -> ApiException.notFound("Tratamento"));
+    }
+
+    /**
+     * Versão-base desatualizada ou conferência pendente: online, recusa; da
+     * fila offline, preserva a proposta no conflito do tratamento.
+     */
+    private Optional<UUID> checkVersion(Treatment t, Change change, Offline offline, String action) {
+        Optional<SyncConflict> open = SyncConflict.findOpen(TREATMENT, t.id);
+        boolean stale = t.version != change.baseVersion();
+        if (!stale && open.isEmpty()) {
+            return Optional.empty();
+        }
+        if (offline == null) {
+            if (open.isPresent()) {
+                throw ApiException.conflict("TREATMENT_IN_REVIEW",
+                        "Há alterações deste tratamento aguardando conferência. Confira antes de alterar.",
+                        Map.of("conflictId", open.get().id));
+            }
             throw new VersionConflictException("O tratamento", t.version);
         }
-        return t;
+        return Optional.of(preserve(t, change, offline, action, open.orElse(null)));
     }
 
-    /** Mudanças só valem do presente em diante; o passado registrado não é reescrito. */
+    private UUID preserve(Treatment t, Change change, Offline offline, String action, SyncConflict conflict) {
+        devices.requireActive(offline.deviceId());
+        UUID actor = currentUser.id();
+        Instant now = Instant.now();
+        Map<String, Object> proposal = new LinkedHashMap<>(offline.request());
+        proposal.put("action", action);
+        proposal.put("deviceId", offline.deviceId().toString());
+
+        SyncOperation op = new SyncOperation();
+        op.id = UUID.randomUUID();
+        op.familyId = t.familyId;
+        op.deviceId = offline.deviceId();
+        op.actorId = actor;
+        op.operationKey = offline.operationKey();
+        op.operationType = "TREATMENT_" + action;
+        op.entityType = TREATMENT;
+        op.entityId = t.id;
+        op.baseVersion = change.baseVersion();
+        op.payload = proposal;
+        op.receivedAt = now;
+        op.finish(SyncOperation.Status.CONFLICT, null);
+        op.persist();
+
+        if (conflict == null) {
+            conflict = new SyncConflict();
+            conflict.id = UUID.randomUUID();
+            conflict.familyId = t.familyId;
+            conflict.entityType = TREATMENT;
+            conflict.entityId = t.id;
+            conflict.baseVersion = change.baseVersion();
+            conflict.status = SyncConflict.Status.OPEN;
+            conflict.reason = CONFLICT_REASON;
+            conflict.details = snapshot(t);
+            conflict.createdAt = now;
+            conflict.persist();
+        }
+        SyncConflictChange preserved = new SyncConflictChange();
+        preserved.id = UUID.randomUUID();
+        preserved.conflictId = conflict.id;
+        preserved.operationId = op.id;
+        preserved.baseVersion = change.baseVersion();
+        preserved.proposedData = proposal;
+        preserved.createdAt = now;
+        preserved.persist();
+
+        audit.record(t.familyId, actor, TREATMENT, t.id, "TREATMENT_CONFLICT_OPENED", snapshot(t), proposal,
+                conflict.reason);
+        audit.publish(t.familyId, "TREATMENT_CONFLICT_OPENED", TREATMENT, t.id, event(t));
+        return conflict.id;
+    }
+
+    /**
+     * Uma alteração feita offline chega depois; o que ela pedia "a partir de
+     * agora" passa a valer a partir do envio (o passado registrado não muda).
+     */
+    private static Change effective(Treatment t, Change change, Offline offline) {
+        if (offline != null && t.status != Treatment.Status.DRAFT
+                && change.effectiveFrom().isBefore(Instant.now().minus(CLOCK_SKEW))) {
+            return new Change(change.baseVersion(), Instant.now(), change.reason());
+        }
+        return change;
+    }
+
+    /**
+     * Mudanças só valem do presente em diante; o passado registrado não é
+     * reescrito. Um rascunho pode ser ativado com início até 30 dias no
+     * passado, para um tratamento que já estava em andamento.
+     */
     private static void requireEffectiveFrom(Treatment t, Change change) {
-        if (t.status != Treatment.Status.DRAFT && change.effectiveFrom().isBefore(Instant.now().minus(CLOCK_SKEW))) {
+        Instant now = Instant.now();
+        if (t.status == Treatment.Status.DRAFT) {
+            if (change.effectiveFrom().isBefore(now.minus(MAX_ACTIVATION_BACKDATE))) {
+                throw ApiException.unprocessable("EFFECTIVE_FROM_IN_PAST",
+                        "A agenda pode começar no máximo 30 dias antes da ativação.");
+            }
+        } else if (change.effectiveFrom().isBefore(now.minus(CLOCK_SKEW))) {
             throw ApiException.unprocessable("EFFECTIVE_FROM_IN_PAST",
                     "A alteração de um tratamento já ativado não pode valer para o passado.");
         }
+    }
+
+    private void restartSchedule(Treatment t, Change change, String reason) {
+        stopSchedule(t, change, reason);
+        schedules.start(t, change.effectiveFrom());
+    }
+
+    private void stopSchedule(Treatment t, Change change, String reason) {
+        int cancelled = schedules.stop(t, change.effectiveFrom(), currentUser.id(), reason);
+        if (cancelled > 0) {
+            audit.record(t.familyId, currentUser.id(), TREATMENT, t.id, "OCCURRENCES_CANCELLED", null,
+                    Map.of("count", cancelled, "from", change.effectiveFrom().toString()), reason);
+        }
+    }
+
+    private static boolean affectsSchedule(Map<String, Object> before, Map<String, Object> after) {
+        return !Objects.equals(before.get("schedule"), after.get("schedule"))
+                || !Objects.equals(before.get("startAt"), after.get("startAt"))
+                || !Objects.equals(before.get("endAt"), after.get("endAt"));
+    }
+
+    private static ApiException scheduleRequired() {
+        return ApiException.unprocessable("SCHEDULE_REQUIRED",
+                "Defina a agenda (horários) antes de ativar o tratamento.");
     }
 
     private Treatment commitVersion(Treatment t, Map<String, Object> before, Change change, String eventType) {
@@ -197,7 +489,8 @@ public class TreatmentService {
         }
     }
 
-    private static void apply(Treatment t, TreatmentData data) {
+    private void apply(Treatment t, TreatmentData data) {
+        t.scheduleRule = data.schedule() == null ? null : schedules.toStored(data.schedule().normalized());
         t.name = Texts.clean(data.name());
         t.kind = data.kind();
         t.prescribedDose = Texts.clean(data.prescribedDose());
@@ -222,6 +515,7 @@ public class TreatmentService {
         m.put("status", t.status.name());
         m.put("startAt", t.startAt.toString());
         m.put("endAt", t.endAt == null ? null : t.endAt.toString());
+        m.put("schedule", t.scheduleRule);
         m.put("version", t.version);
         return m;
     }
