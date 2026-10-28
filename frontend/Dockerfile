@@ -17,7 +17,7 @@ ARG VITE_FIREBASE_APP_ID=
 RUN npm run build
 
 # --- Entrega (nginx) ----------------------------------------------------------
-FROM nginx:1.30.6-alpine
+FROM nginx:1.31.0-alpine
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY frontend/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /src/frontend/dist /usr/share/nginx/html
