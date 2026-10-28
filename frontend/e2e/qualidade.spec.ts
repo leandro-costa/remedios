@@ -101,13 +101,18 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await audit(p, "Para conferir", problems);
 
   // Teclado: o elemento focado tem contorno visível.
+  // Parte de um ponto conhecido (o campo "Nome" da nova pessoa) e volta pelo
+  // teclado até o botão anterior: a aba Família é a última, e Tab a partir
+  // dela sairia da página.
   await p.getByRole("link", { name: "Família", exact: true }).click();
-  await p.keyboard.press("Tab");
-  await p.keyboard.press("Tab");
+  await p.getByLabel("Nome", { exact: true }).focus();
+  await p.keyboard.press("Shift+Tab");
   const outline = await p.evaluate(() => {
-    const style = getComputedStyle(document.activeElement!);
-    return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    const el = document.activeElement!;
+    const style = getComputedStyle(el);
+    return { tag: el.tagName, style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
   });
+  expect(["A", "BUTTON"]).toContain(outline.tag);
   expect(outline.style).not.toBe("none");
   expect(outline.width).toBeGreaterThanOrEqual(2);
 
