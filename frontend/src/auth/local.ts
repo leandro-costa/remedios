@@ -16,6 +16,13 @@ function base64Url(data: ArrayBuffer | string): string {
 }
 
 async function signingKey(): Promise<CryptoKey> {
+  // O navegador só libera a criptografia em endereço seguro (localhost ou HTTPS).
+  if (!globalThis.crypto?.subtle) {
+    throw new Error(
+      `O modo local só funciona em endereço seguro. Abra http://localhost${location.port ? `:${location.port}` : ""} ` +
+      "no computador que roda o Docker, ou use HTTPS.",
+    );
+  }
   const body = privateKeyPem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
   const der = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
   return crypto.subtle.importKey("pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
@@ -35,7 +42,8 @@ export async function localToken(user: AuthUser, projectId: string, now = Math.f
       exp: now + 3600,
     }),
   );
-  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", await signingKey(), new TextEncoder().encode(`${header}.${payload}`));
+  const key = await signingKey();
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${payload}`));
   return `${header}.${payload}.${base64Url(signature)}`;
 }
 

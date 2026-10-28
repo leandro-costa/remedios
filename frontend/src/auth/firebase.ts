@@ -32,8 +32,20 @@ function translate(error: unknown): Error {
     "auth/network-request-failed": "Sem conexão. O login precisa de internet.",
     "auth/too-many-requests": "Muitas tentativas. Aguarde um pouco e tente de novo.",
     "auth/popup-closed-by-user": "Login cancelado.",
+    "auth/cancelled-popup-request": "Login cancelado.",
+    // Erros de configuração: dizem a quem instala o que ajustar no Firebase.
+    "auth/unauthorized-domain":
+      `Este endereço (${location.hostname}) não está autorizado no Firebase: adicione-o em Authentication → Configurações → Domínios autorizados.`,
+    "auth/operation-not-allowed":
+      "Este tipo de login não está ativado no Firebase: ative-o em Authentication → Método de login.",
+    "auth/invalid-api-key": "A chave do Firebase (VITE_FIREBASE_API_KEY) está errada ou vazia no .env.",
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
+      "A chave do Firebase (VITE_FIREBASE_API_KEY) está errada ou vazia no .env.",
+    "auth/configuration-not-found":
+      "O projeto do Firebase não foi encontrado: confira FIREBASE_PROJECT_ID e VITE_FIREBASE_* no .env.",
   };
-  return new Error(messages[code] ?? "Não foi possível entrar. Tente novamente.");
+  if (!messages[code]) console.error("Falha no login do Firebase", error);
+  return new Error(messages[code] ?? `Não foi possível entrar. Tente novamente.${code ? ` (${code})` : ""}`);
 }
 
 export function createFirebaseAuth(): AuthBackend {

@@ -55,10 +55,14 @@ services:
       - "127.0.0.1:${API_PORT:-8010}:8010"
     healthcheck:
       # O Quarkus só abre a porta depois das migrações e da inicialização.
-      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8010"]
-      interval: 3s
+      # 127.0.0.1 (não "localhost"): a API escuta só em IPv4, e "localhost"
+      # pode resolver primeiro para ::1 dentro do contêiner.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8010"]
+      start_period: 60s
+      start_interval: 2s
+      interval: 5s
       timeout: 3s
-      retries: 40
+      retries: 20
 
   # PWA (build estático servido pelo nginx, que repassa /api para a API).
   web:
