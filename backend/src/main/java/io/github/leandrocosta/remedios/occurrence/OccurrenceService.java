@@ -316,6 +316,57 @@ public class OccurrenceService {
         return o;
     }
 
+    /** Limite do adiamento de um lembrete. */
+    static final Duration MAX_SNOOZE = Duration.ofHours(12);
+
+    /**
+     * "Lembrar daqui a pouco": adia só o lembrete desta dose para quem pediu.
+     * O horário da dose e as próximas doses não mudam. Vindo da fila offline
+     * depois do horário pedido, ou com a dose já decidida, não há o que adiar
+     * e nada muda.
+     */
+    @Transactional
+    public DoseOccurrence snooze(UUID familyId, UUID occurrenceId, Instant remindAt) {
+        access.requireMember(familyId);
+        DoseOccurrence o = DoseOccurrence.<DoseOccurrence>find("familyId = ?1 and id = ?2", familyId, occurrenceId)
+                .firstResultOptional().orElseThrow(() -> ApiException.notFound("Dose"));
+        Instant now = Instant.now();
+        if (remindAt.isAfter(now.plus(MAX_SNOOZE))) {
+            throw ApiException.unprocessable("SNOOZE_TOO_LONG", "O lembrete pode ser adiado por até 12 horas.");
+        }
+        if (!o.isOpen() || !remindAt.isAfter(now)) {
+            return o;
+        }
+        int changed = em.createNativeQuery("""
+                INSERT INTO reminder_snooze (dose_occurrence_id, user_id, remind_at)
+                VALUES (:o, :u, :at)
+                ON CONFLICT (dose_occurrence_id, user_id) DO UPDATE
+                   SET remind_at = EXCLUDED.remind_at, times = reminder_snooze.times + 1, updated_at = now()
+                 WHERE reminder_snooze.times < 100
+                """)
+                .setParameter("o", o.id).setParameter("u", currentUser.id()).setParameter("at", remindAt)
+                .executeUpdate();
+        if (changed == 0) {
+            throw ApiException.unprocessable("SNOOZE_LIMIT", "O lembrete desta dose já foi adiado muitas vezes.");
+        }
+        return o;
+    }
+
+    /** Volta aos lembretes normais da agenda. */
+    @Transactional
+    public DoseOccurrence cancelSnooze(UUID familyId, UUID occurrenceId) {
+        access.requireMember(familyId);
+        DoseOccurrence o = DoseOccurrence.<DoseOccurrence>find("familyId = ?1 and id = ?2", familyId, occurrenceId)
+                .firstResultOptional().orElseThrow(() -> ApiException.notFound("Dose"));
+        // Mantém a linha: a contagem numera os próximos adiamentos no reminder_log.
+        em.createNativeQuery("""
+                UPDATE reminder_snooze SET remind_at = NULL, updated_at = now()
+                 WHERE dose_occurrence_id = :o AND user_id = :u
+                """)
+                .setParameter("o", o.id).setParameter("u", currentUser.id()).executeUpdate();
+        return o;
+    }
+
     // --- Revisão de conflitos ---------------------------------------------------
 
     public enum Decision { ADMINISTERED, NOT_ADMINISTERED, CANCELLED }

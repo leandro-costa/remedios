@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { localTime, newUser, run, shot, activate } from "./helpers";
+import { localTime, newUser, run, shot, activate, goOffline, goOnline } from "./helpers";
 
 test("estou cuidando da dose, notificações e lembretes avulsos", async ({ browser }) => {
   // Horários fixados no início: evita a virada de minuto durante o teste.
@@ -46,6 +46,32 @@ test("estou cuidando da dose, notificações e lembretes avulsos", async ({ brow
   await p.getByRole("link", { name: new RegExp(T_PLUS_60) }).click();
   await expect(p.getByText(`Bruno N ${run} está cuidando desta dose`)).toBeVisible();
   await shot(p, "8-cuidando");
+
+  // Lembrar daqui a pouco: só o lembrete da Ana muda; a dose fica no horário.
+  const snooze = p.getByRole("region", { name: "Lembrar daqui a pouco" });
+  await snooze.getByRole("button", { name: "15 min" }).click();
+  await expect(snooze.getByText("Vamos lembrar você às")).toBeVisible();
+  await expect(snooze.getByText(`a dose continua prevista para as ${T_PLUS_60}`)).toBeVisible();
+  await snooze.getByRole("button", { name: "Cancelar o adiamento" }).click();
+  await expect(snooze.getByText("Vamos lembrar você às")).toHaveCount(0);
+  // Offline: fica no aparelho, aguardando envio, e sincroniza depois.
+  await goOffline(ana.context, p);
+  await snooze.getByRole("button", { name: "30 min" }).click();
+  await expect(snooze.getByText("Aguardando envio")).toBeVisible();
+  await expect(snooze.getByText("Vamos lembrar você às")).toBeVisible();
+  await shot(p, "12-lembrar-depois");
+  await goOnline(ana.context, p);
+  await expect(snooze.getByText("Aguardando envio")).toHaveCount(0);
+  await expect(snooze.getByText("Vamos lembrar você às")).toBeVisible();
+  // Bruno não vê o adiamento da Ana.
+  await b.reload();
+  await expect(b.getByRole("button", { name: /Você está cuidando até/ })).toBeVisible();
+  await expect(b.getByText("Vamos lembrar você às")).toHaveCount(0);
+
+  // Atalho para mudar os horários de vez: a alteração do tratamento, com vigência e motivo.
+  await p.getByRole("link", { name: "Mudar horários do tratamento" }).click();
+  await expect(p.getByRole("heading", { name: "Alterar tratamento" })).toBeVisible();
+  await expect(p.getByText("Motivo da alteração")).toBeVisible();
 
   // Lembrete avulso na aba Saúde
   await p.getByRole("link", { name: "Saúde" }).click();

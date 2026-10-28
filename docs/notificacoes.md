@@ -38,6 +38,14 @@ sequenceDiagram
 - **"Estou cuidando desta dose"** (seção 6.3): silencia os lembretes dos outros
   responsáveis por 20 minutos (`remedios.reminders.claim`). Não é
   administração e é liberado ao registrar a dose.
+- **"Lembrar daqui a pouco"** (tela da dose: 15 min, 30 min ou 1 hora): adia
+  só os lembretes de quem pediu. Até a hora escolhida, nenhum lembrete da
+  agenda vai para essa pessoa; na hora, chega um "Lembrete da dose" (ou "Dose
+  atrasada"), e depois a agenda segue no horário original. **A dose não muda
+  de horário**, fica atrasada depois da tolerância como sempre, e as próximas
+  doses não mudam. Funciona offline (a hora é calculada no aparelho e vai pela
+  fila). Para mudar os horários de vez, a tela da dose leva a **Mudar horários
+  do tratamento** (alteração com vigência e motivo).
 - **Sem avisos fora de hora:** se o servidor ficou parado, um lembrete com mais
   de 15 minutos de atraso (`remedios.reminders.max-delay`) não é enviado.
 - **Várias instâncias da API** não duplicam lembretes: cada envio é reservado

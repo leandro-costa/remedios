@@ -44,6 +44,21 @@ class ReminderRulesTest {
     }
 
     @Test
+    void snoozeHoldsTheScheduleRemindersUntilTheChosenTimeThenTheScheduleGoesOn() {
+        List<ReminderService.Slot> slots = ReminderService.slots(AT, schedule(10, 15, 4), new UserNotificationSettings());
+        Duration max = Duration.ofMinutes(15);
+        ReminderService.Snooze snooze = new ReminderService.Snooze(AT.plusSeconds(20 * 60), 1);
+        assertNull(ReminderService.due(slots, snooze, AT, max), "adiado: nem o lembrete do horário");
+        assertNull(ReminderService.due(slots, snooze, AT.plusSeconds(15 * 60), max));
+        assertEquals(201, ReminderService.due(slots, snooze, AT.plusSeconds(20 * 60), max).number());
+        assertEquals(201, ReminderService.due(slots, snooze, AT.plusSeconds(25 * 60), max).number());
+        assertEquals(2, ReminderService.due(slots, snooze, AT.plusSeconds(30 * 60), max).number(),
+                "depois do adiamento, a agenda segue no mesmo horário");
+        ReminderService.Snooze cancelled = new ReminderService.Snooze(null, 1);
+        assertEquals(0, ReminderService.due(slots, cancelled, AT, max).number());
+    }
+
+    @Test
     void quietHoursCrossingMidnightInTheDeviceTimezone() {
         UserNotificationSettings prefs = new UserNotificationSettings();
         prefs.quietHoursEnabled = true;

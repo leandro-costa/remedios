@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { OccurrenceDetail, OccurrenceView } from "../api/types";
+import type { OutboxItem } from "../db/db";
+import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
@@ -21,8 +23,11 @@ export function DosePage() {
   const detail = useCached(`dose:${id}`, () => api<OccurrenceDetail>(`/families/${family.id}/occurrences/${id}`));
   const outbox = useOutbox(family.id);
   const queued = outbox.find((i) => i.occurrenceId === id && i.state === "pending");
+  const pendingMutations = outbox.filter((i) => i.kind === "MUTATION" && i.entityId === id && i.state === "pending");
   // Correção ou conferência feita offline, ainda não enviada.
-  const change = outbox.find((i) => i.kind === "MUTATION" && i.entityId === id && i.state === "pending");
+  const change = pendingMutations.find((i) => !i.path.endsWith("/snooze"));
+  // "Lembrar daqui a pouco" ainda não enviado: vale o último.
+  const snooze = pendingMutations.findLast((i) => i.path.endsWith("/snooze"));
   const navigate = useNavigate();
 
   const occurrence = detail.data?.occurrence ?? fromAgenda;
@@ -58,6 +63,17 @@ export function DosePage() {
       )}
       {open && !queued && <Claim occurrence={occurrence} onChange={() => void detail.reload()} />}
       {open && !queued && <RecordForm occurrence={occurrence} onDone={() => navigate("/")} />}
+      {open && !queued && <Snooze occurrence={occurrence} pending={snooze} onChange={() => void detail.reload()} />}
+      {open && !queued && (
+        <section className="card stack">
+          <h2>Mudar horários do tratamento</h2>
+          <p className="muted small">
+            Se os horários mudaram de vez, altere o tratamento: você escolhe a partir de quando vale e o motivo,
+            e confere antes de salvar. Doses já registradas não mudam.
+          </p>
+          <Link className="btn" to={`/tratamentos/${occurrence.treatment.id}/editar`}>Mudar horários do tratamento</Link>
+        </section>
+      )}
       {occurrence.administration && <RecordSummary detail={detail.data} occurrence={occurrence} />}
       {occurrence.status === "NOT_ADMINISTERED" && (
         <Notice>
@@ -107,6 +123,67 @@ function Claim({ occurrence, onChange }: { occurrence: OccurrenceView; onChange:
       {!online && <p className="muted small">"Estou cuidando" avisa os outros na hora; sem conexão, não há como avisar.</p>}
       {!mine && <p className="muted small">Avisa os outros responsáveis e silencia os lembretes deles por alguns minutos. Não registra a dose.</p>}
     </div>
+  );
+}
+
+const SNOOZE_MINUTES = [15, 30, 60];
+
+/**
+ * "Lembrar daqui a pouco": adia só o lembrete de quem pediu. A dose continua
+ * no horário previsto (e fica atrasada depois da tolerância), e as próximas
+ * não mudam. Funciona offline: a hora é calculada aqui e vai pela fila.
+ */
+function Snooze({ occurrence, pending, onChange }: { occurrence: OccurrenceView; pending?: OutboxItem; onChange: () => void }) {
+  const family = useFamily();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remindAt = pending ? (pending.method === "DELETE" ? null : String(pending.body.remindAt)) : occurrence.remindAt ?? null;
+  const active = remindAt !== null && new Date(remindAt) > new Date();
+
+  async function save(minutes: number | null) {
+    setBusy(true);
+    setError(null);
+    const at = minutes === null ? null : new Date(Date.now() + minutes * 60_000).toISOString();
+    try {
+      await mutate({
+        familyId: family.id,
+        method: at ? "PUT" : "DELETE",
+        path: `/families/${family.id}/occurrences/${occurrence.id}/snooze`,
+        body: at ? { remindAt: at } : undefined,
+        label: at ? `Lembrete adiado para ${formatTime(at)}` : "Cancelamento do lembrete adiado",
+        entityId: occurrence.id,
+      });
+      onChange();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card stack" aria-label="Lembrar daqui a pouco">
+      <h2>Lembrar daqui a pouco</h2>
+      {error && <Notice tone="error">{error}</Notice>}
+      {active && (
+        <div className="row wrap">
+          <span>Vamos lembrar você às <strong>{formatTime(remindAt!)}</strong>.</span>
+          {pending && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+        </div>
+      )}
+      <div className="chips" role="group" aria-label="Lembrar de novo daqui a">
+        {SNOOZE_MINUTES.map((m) => (
+          <button key={m} type="button" className="chip" disabled={busy} onClick={() => void save(m)}>
+            {m < 60 ? `${m} min` : "1 hora"}
+          </button>
+        ))}
+      </div>
+      {active && <button className="btn" disabled={busy} onClick={() => void save(null)}>Cancelar o adiamento</button>}
+      <p className="muted small">
+        Só o seu lembrete muda: a dose continua prevista para as {formatTime(occurrence.scheduledAt)} e as próximas
+        doses não mudam. O lembrete chega nos seus aparelhos com notificações ativadas.
+      </p>
+    </section>
   );
 }
 

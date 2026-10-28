@@ -193,6 +193,8 @@ export interface OccurrenceView {
   /** "Estou cuidando desta dose", quando ativo. */
   claimedBy: UserRef | null;
   claimedUntil: string | null;
+  /** "Lembrar daqui a pouco" de quem consulta: só o lembrete, não a dose. */
+  remindAt?: string | null;
 }
 
 export interface TrailEntry {
