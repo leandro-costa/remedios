@@ -4,6 +4,7 @@ import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import { loadAuth } from "./auth";
 import { SessionProvider } from "./session";
+import "@fontsource-variable/plus-jakarta-sans";
 import "./styles.css";
 
 registerSW({ immediate: true });

@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => {
   // Constante no build: o código do modo local (com a chave de teste) só entra
   // no pacote quando VITE_AUTH_MODE=local.
   define: { __AUTH_MODE__: JSON.stringify(authMode) },
+  // Fontes nunca viram data: URI, que a CSP (font-src 'self') bloqueia.
+  build: { assetsInlineLimit: (file: string) => (file.endsWith(".woff2") ? false : undefined) },
   plugins: [
     react(),
     VitePWA({
@@ -31,8 +33,8 @@ export default defineConfig(({ mode }) => {
         scope: "/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#f6f7f9",
-        theme_color: "#1f6f5c",
+        background_color: "#f3f6f5",
+        theme_color: "#0e2a33",
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png" },

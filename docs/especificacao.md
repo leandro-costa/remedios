@@ -163,7 +163,9 @@ associação e impedir vínculo indevido entre pessoas, contas e famílias.
     horário.
 4.  Selecionar **Registrar administração**.
 5.  Confirmar o horário efetivo (preenchido com o horário atual,
-    editável quando necessário).
+    editável quando necessário; o atalho **No horário previsto**
+    preenche o horário da dose quando ele já passou, e a pessoa ainda
+    confirma).
 6.  Salvar; o aplicativo registra usuário, horário de administração
     informado, horário do registro e dispositivo de origem.
 7.  Atualizar a interface local imediatamente.

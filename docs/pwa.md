@@ -9,7 +9,7 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | Tela | Rota | O que faz |
 | --- | --- | --- |
 | Hoje | `/` | doses do dia por pessoa, estado de sincronização, atalho para registrar |
-| Dose | `/doses/:id` | conferir e registrar administração ou "não foi dada", corrigir, revisar conflitos, trilha |
+| Dose | `/doses/:id` | conferir e registrar administração (com atalho "No horário previsto") ou "não foi dada", corrigir, revisar conflitos, trilha |
 | Tratamentos | `/tratamentos` | lista por pessoa e situação; cadastro e alteração com editor de agenda e conferência |
 | Histórico | `/historico` | filtros por pessoa, tratamento, período e responsável |
 | Família | `/familia` | membros e convites, pessoas, padrões da família, preferências, aparelhos, conta |

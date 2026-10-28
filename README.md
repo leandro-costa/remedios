@@ -12,6 +12,7 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 - Decisões provisórias da implementação: [`docs/decisoes.md`](docs/decisoes.md)
 - Autenticação com Firebase: [`docs/firebase.md`](docs/firebase.md)
 - Aplicativo (PWA) e funcionamento offline: [`docs/pwa.md`](docs/pwa.md)
+- Identidade visual (cores, tipografia e componentes): [`docs/identidade.md`](docs/identidade.md)
 - Notificações (lembretes e avisos): [`docs/notificacoes.md`](docs/notificacoes.md)
 - Qualidade (fase 5): [`docs/qualidade.md`](docs/qualidade.md)
 - Segurança e privacidade: [`docs/seguranca.md`](docs/seguranca.md)
