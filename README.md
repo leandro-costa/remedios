@@ -143,7 +143,7 @@ Docker instalado.
 ```bash
 cp .env.example .env               # e preencha FIREBASE_PROJECT_ID
 
-docker compose up -d --build       # app em http://localhost:8000 (API em :8080)
+docker compose up -d --build       # app em http://localhost:8000 (API em :8010)
 docker compose run --rm tests      # testes de integração do backend
 docker compose run --rm e2e        # ponta a ponta do app (exige o modo local, veja docs/pwa.md)
 docker compose logs -f api         # acompanhar a API

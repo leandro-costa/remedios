@@ -111,7 +111,7 @@ origem segura (ou em `localhost`).
 ```bash
 cd frontend
 npm ci
-npm run dev        # http://localhost:5173, com /api repassado para :8080
+npm run dev        # http://localhost:5173, com /api repassado para :8010
 npm test           # testes unitários (Vitest)
 npm run typecheck
 npm run e2e        # ponta a ponta (Playwright), veja abaixo

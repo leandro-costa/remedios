@@ -5,7 +5,7 @@
 #
 #   scripts/token-local.sh [uid] [nome]
 #   TOKEN=$(scripts/token-local.sh ana "Ana")
-#   curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+#   curl -H "Authorization: Bearer $TOKEN" http://localhost:8010/api/me
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
