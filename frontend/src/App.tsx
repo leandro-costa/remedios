@@ -18,7 +18,9 @@ import { useSession } from "./session";
 
 export function App() {
   const session = useSession();
-  if (session.loading) return <Spinner />;
+  // Logo após o login, o usuário já existe mas as famílias ainda não chegaram:
+  // sem esperar, a lista vazia mandaria para "criar família" quem já tem uma.
+  if (session.loading || (session.user && !session.me && !session.error)) return <Spinner />;
   if (!session.user) return <LoginPage />;
   if (session.error && !session.me) {
     return (
