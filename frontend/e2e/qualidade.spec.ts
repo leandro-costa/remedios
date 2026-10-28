@@ -71,6 +71,10 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await p.getByRole("link", { name: "Hoje" }).click();
   await expect(p.getByRole("link", { name: new RegExp(T_MINUS_60) })).toBeVisible();
   await audit(p, "Hoje", problems);
+  await p.locator(".next-dose").getByRole("button", { name: /Dada no horário/ }).click();
+  await expect(p.getByRole("dialog", { name: "Dada no horário?" })).toBeVisible();
+  await audit(p, "Dada no horário (confirmação)", problems);
+  await p.getByRole("dialog").getByRole("button", { name: "Cancelar" }).click();
   await p.getByRole("link", { name: new RegExp(T_MINUS_60) }).click();
   await expect(p.getByRole("button", { name: "Confirmar administração" })).toBeVisible();
   await audit(p, "Dose", problems);

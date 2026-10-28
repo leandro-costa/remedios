@@ -211,6 +211,20 @@ legend { font-weight: 600; margin-bottom: 0.5rem; }
   color: inherit; text-decoration: none; box-shadow: var(--shadow);
 }
 .dose-late { border-color: var(--late); }
+/* "Dada no horário" fica fora do link da dose (botão não pode ficar dentro de link). */
+.dose-row { position: relative; }
+.dose-has-quick { padding-bottom: 4rem; }
+/* Alinhado à coluna do medicamento: 1rem de margem + 3.4rem do horário + 0.75rem de espaço. */
+.dose-quick { position: absolute; left: calc(1rem + 3.4rem + 0.75rem + 1.5px); bottom: 1.45rem; white-space: nowrap; }
+.next-dose-actions { display: grid; grid-template-columns: 3fr 2fr; gap: 0.6rem; }
+.next-dose-actions .btn { white-space: nowrap; padding-inline: 0.75rem; }
+.btn svg { flex: none; }
+.confirm-dialog {
+  width: min(calc(100% - 2rem), 440px); border: 0; border-radius: var(--radius); padding: 1.25rem;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+}
+.confirm-dialog::backdrop { background: rgb(14 42 51 / 55%); }
+.confirm-dialog h2 { margin-top: 0; }
 .dose-time { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .dose-main { display: flex; flex-direction: column; min-width: 0; }
 .dose-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
