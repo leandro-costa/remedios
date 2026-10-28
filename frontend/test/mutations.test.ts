@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/client";
-import { applyLocal, isPending } from "../src/db/cache";
+import { applyLocal, clearLocalData, isPending } from "../src/db/cache";
 import { db, type OutboxItem } from "../src/db/db";
 import { flush, mutate, pendingFor, retry } from "../src/sync/outbox";
 
@@ -115,5 +115,15 @@ describe("gravações pela fila", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init?.method).toBe("DELETE");
     expect(init?.body).toBeUndefined();
+  });
+});
+
+describe("sair da conta", () => {
+  it("apaga a cópia offline e a fila do aparelho", async () => {
+    await db.cache.put({ key: "persons:f1", value: [{ id: "p1" }], savedAt: Date.now() });
+    await db.outbox.add(item([]));
+    await clearLocalData();
+    expect(await db.cache.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(0);
   });
 });

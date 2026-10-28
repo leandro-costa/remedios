@@ -38,6 +38,7 @@ export function FamilyPage() {
       <PushSettings />
       <Preferences />
       <Devices />
+      {isAdmin && <ExportData />}
       <section className="card stack">
         <h2>Conta</h2>
         <p>{session.me?.displayName} <span className="muted small">({session.auth.mode === "local" ? "modo local" : session.user?.email})</span></p>
@@ -423,6 +424,33 @@ function Devices() {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** Exportação de todos os dados da família (LGPD: acesso e portabilidade). */
+function ExportData() {
+  const family = useFamily();
+  const online = useOnline();
+  const { busy, error, run } = useAction();
+  return (
+    <section className="card stack">
+      <h2>Seus dados</h2>
+      <p className="muted small">
+        Baixe um arquivo com tudo o que a família registrou: pessoas, tratamentos e versões, doses, aferições, sintomas e
+        a trilha de auditoria. O arquivo contém dados de saúde; guarde-o com cuidado. A exportação fica registrada.
+      </p>
+      {error && <Notice tone="error">{error}</Notice>}
+      <button className="btn" disabled={busy || !online} onClick={() => void run(async () => {
+        const data = await api<unknown>(`/families/${family.id}/export`);
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `remedios-${family.name.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      })}>Exportar dados da família</button>
+      {!online && <p className="muted small">A exportação precisa de conexão: o arquivo é montado pelo servidor.</p>}
     </section>
   );
 }

@@ -14,6 +14,8 @@
   --error: #b3261e;
   --error-soft: #fde7e5;
   --info-soft: #e8eef8;
+  /* Contorno de foco: contrasta com o fundo, a superfície e o verde principal. */
+  --focus: #b35c00;
   --radius: 14px;
   --tabbar: 64px;
   color-scheme: light dark;
@@ -39,10 +41,15 @@
     --error: #ff8a80;
     --error-soft: #3d1d1b;
     --info-soft: #1e2a3a;
+    --focus: #ffb547;
   }
 }
 
 * { box-sizing: border-box; }
+
+/* Foco sempre visível para quem navega pelo teclado ou por leitor de tela. */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.topbar :focus-visible, .btn-primary:focus-visible { outline-color: var(--focus); box-shadow: 0 0 0 5px var(--surface); }
 body { margin: 0; background: var(--bg); color: var(--text); }
 h1 { font-size: 1.45rem; margin: 0.25rem 0 0.5rem; }
 h2 { font-size: 1.1rem; margin: 0 0 0.5rem; }

@@ -13,6 +13,9 @@ calcula nem ajusta doses e não presume que um medicamento foi administrado.
 - Autenticação com Firebase: [`docs/firebase.md`](docs/firebase.md)
 - Aplicativo (PWA) e funcionamento offline: [`docs/pwa.md`](docs/pwa.md)
 - Notificações (lembretes e avisos): [`docs/notificacoes.md`](docs/notificacoes.md)
+- Qualidade (fase 5): [`docs/qualidade.md`](docs/qualidade.md)
+- Segurança e privacidade: [`docs/seguranca.md`](docs/seguranca.md)
+- Operação (backup e restauração): [`docs/operacao.md`](docs/operacao.md)
 - Demandas futuras: [`docs/backlog.md`](docs/backlog.md)
 
 ## Arquitetura
@@ -72,7 +75,13 @@ flowchart LR
   - [x] reenvio seguro em qualquer rota (`Idempotency-Key`, seção 10.1)
   - [x] alteração de tratamento sobre versão antiga vai para conferência (seção 10.2)
   - [x] ativar tratamento já em andamento: pergunta se as doses anteriores foram dadas
-- [ ] **Fase 5 — Qualidade e segurança**
+- [x] **Fase 5 — Qualidade e segurança**
+  - [x] testes de concorrência (rajadas simultâneas de registros, reenvios e alterações)
+  - [x] testes de aparelhos offline, inclusive dois aparelhos alterando o mesmo tratamento
+  - [x] backup, restauração e teste de restauração no CI
+  - [x] revisão de segurança: matriz de autorização de todas as rotas, CSP e cabeçalhos, limites, auditoria de dependências, exportação dos dados (LGPD)
+  - [x] acessibilidade: WCAG 2.2 AA verificada automaticamente nas telas principais, temas claro e escuro
+  - [ ] decisões pendentes antes da produção: exclusão de conta, retenção e LGPD ([`docs/seguranca.md`](docs/seguranca.md))
 
 ### Demandas futuras
 
@@ -101,8 +110,9 @@ backend/                  API Quarkus (Dockerfile, mvnw)
     sync/        operações dos aparelhos e conflitos
     health/      aferições, sintomas e linhas de referência
     push/        Web Push, lembretes, publicador da outbox, lembretes avulsos
+    privacy/     exportação dos dados da família (LGPD)
     audit/       auditoria e outbox
-scripts/                  utilitários (token do modo local, chaves VAPID)
+scripts/                  utilitários (token do modo local, chaves VAPID, backup e restauração)
 docs/                     especificação, API, decisões e Firebase
 ```
 
