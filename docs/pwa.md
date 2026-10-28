@@ -25,9 +25,13 @@ instalado na tela inicial do Android, do iPhone ou do computador. Fica em
 | --- | --- | --- | --- |
 | ![Gráfico com referência e dose](telas/6-grafico-temperatura.png) | ![Sintomas e gráfico](telas/7-saude.png) | ![Pessoa aguardando envio](telas/9-pessoa-offline.png) | ![Pergunta das doses anteriores](telas/10-doses-anteriores.png) |
 
-| Lembrar daqui a pouco | Dada no horário |
-| --- | --- |
-| ![Lembrete adiado, aguardando envio](telas/12-lembrar-depois.png) | ![Confirmação de dose dada no horário](telas/13-dada-no-horario.png) |
+| Lembrar daqui a pouco | Dada no horário | Família | Tratamentos |
+| --- | --- | --- | --- |
+| ![Lembrete adiado, aguardando envio](telas/12-lembrar-depois.png) | ![Confirmação de dose dada no horário](telas/13-dada-no-horario.png) | ![Família com avatares e doses do dia](telas/14-familia.png) | ![Tratamentos por pessoa](telas/15-tratamentos.png) |
+
+| Histórico | Entrar | Hoje (tema escuro) |
+| --- | --- | --- |
+| ![Histórico de registros](telas/16-historico.png) | ![Tela de entrada](telas/17-entrar.png) | ![Hoje no tema escuro](telas/18-hoje-escuro.png) |
 
 **Dada no horário:** na tela Hoje, a dose em aberto cujo horário já chegou
 tem o botão **Dada no horário** (no cartão "Próxima dose" e na lista). Ele

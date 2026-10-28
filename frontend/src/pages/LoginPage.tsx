@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Mark } from "../components/Icon";
 import { Notice } from "../components/Layout";
 import { useSession } from "../session";
 
@@ -41,8 +42,11 @@ export function LoginPage() {
 
   return (
     <div className="page narrow login">
-      <img src="/icon.svg" alt="" width={72} height={72} />
-      <h1>Remédios da Família</h1>
+      <div className="brand">
+        <Mark className="brand-mark" />
+        <h1>Remédios da Família</h1>
+        <p className="brand-tagline">O cuidado da família, dose a dose</p>
+      </div>
       <p className="muted">Agenda e registro de medicamentos, compartilhados entre os responsáveis.</p>
 
       {error && <Notice tone="error">{error}</Notice>}

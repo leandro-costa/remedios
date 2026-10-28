@@ -2,13 +2,17 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type {
-  DeviceView, FamilySettings, InvitationView, IssuedInvitation, MemberView, NotificationSettings, PersonView, Role,
+  DeviceView, FamilySettings, InvitationView, IssuedInvitation, MemberView, NotificationSettings, OccurrenceView, PersonView, Role,
 } from "../api/types";
+import { Avatar } from "../components/Avatar";
+import { Icon } from "../components/Icon";
 import { Notice } from "../components/Layout";
+import { PageHeader } from "../components/PageHeader";
+import { ProgressRing } from "../components/ProgressRing";
 import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { ROLE } from "../lib/labels";
-import { formatDate, formatWhen } from "../lib/time";
+import { addDays, formatDate, formatTime, formatWhen, sameDay, startOfDay } from "../lib/time";
 import { disablePush, enablePush, pushState, testPush, type PushState } from "../sync/push";
 import { isPending } from "../db/cache";
 import { mutate } from "../sync/outbox";
@@ -20,9 +24,14 @@ export function FamilyPage() {
   const session = useSession();
   const online = useOnline();
   const isAdmin = family.myRole === "ADMIN";
+  // Atalho do sino na tela Hoje: rola até as notificações.
+  useEffect(() => {
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, []);
   return (
     <div className="page">
-      <h1>Família e configurações</h1>
+      <PageHeader title={family.name} subtitle="Doses de hoje por pessoa"
+        action={<a href="#nova-pessoa" className="round-btn" aria-label="Nova pessoa" title="Nova pessoa"><Icon name="plus" /></a>} />
       {!online && <Notice tone="warn">Sem conexão: as alterações ficam guardadas neste aparelho e são enviadas quando a conexão voltar. Convites e notificações precisam de internet.</Notice>}
       {session.families.length > 1 && (
         <label>
@@ -32,8 +41,9 @@ export function FamilyPage() {
           </select>
         </label>
       )}
-      <Members isAdmin={isAdmin} />
       <Persons />
+      <Members isAdmin={isAdmin} />
+      <h2 className="section-title">Configurações</h2>
       <Defaults isAdmin={isAdmin} />
       <PushSettings />
       <Preferences />
@@ -91,13 +101,17 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <section className="card stack">
-      <h2>Membros</h2>
+      <h2 className="eyebrow">Responsáveis</h2>
       {error && <Notice tone="error">{error}</Notice>}
-      <ul className="plain">
+      <ul className="people">
         {(members.data ?? []).map((m) => (
-          <li key={m.userId} className="row between">
-            <span>{m.displayName} · <span className="muted">{ROLE[m.role]}</span></span>
-            <span className="row">
+          <li key={m.userId} className="person-row">
+            <Avatar name={m.displayName} id={m.userId} size={40} />
+            <span className="item-main">
+              <strong>{m.displayName}{m.userId === session.me?.id ? " (você)" : ""}</strong>
+              <span className="muted small">{ROLE[m.role]}</span>
+            </span>
+            <span className="row wrap person-actions">
               {isAdmin && m.userId !== session.me?.id && (
                 <>
                   <button className="btn btn-small" disabled={busy} onClick={() => void run(async () => {
@@ -206,30 +220,63 @@ function Persons() {
     });
   });
 
+  const today = startOfDay(new Date());
+  const agenda = useCached(`agenda:${family.id}:${today.toISOString()}`, () =>
+    api<OccurrenceView[]>(`/families/${family.id}/occurrences`, {
+      query: { from: addDays(today, -1).toISOString(), to: addDays(today, 3).toISOString() },
+    }));
+  const todays = (agenda.data ?? []).filter((o) => sameDay(new Date(o.scheduledAt), today) && o.status !== "CANCELLED");
+  const summary = (personId: string) => {
+    const doses = todays.filter((o) => o.person.id === personId);
+    const given = doses.filter((o) => o.status === "ADMINISTERED").length;
+    const open = doses.filter((o) => o.status === "PENDING" || o.status === "SCHEDULED")
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    const late = open.filter((o) => o.late).length;
+    const detail = doses.length === 0 ? "Sem doses hoje"
+      : late > 0 ? `${open[0].treatment.name} · ${late} ${late === 1 ? "atrasada" : "atrasadas"}`
+      : open.length > 0 ? `${open[0].treatment.name} · próxima às ${formatTime(open[0].scheduledAt)}`
+      : "Tudo certo hoje";
+    return { total: doses.length, given, detail };
+  };
+  const active = (persons.data ?? []).filter((p) => p.active);
+  const inactive = (persons.data ?? []).filter((p) => !p.active);
+
   return (
-    <section className="card stack">
-      <h2>Pessoas acompanhadas</h2>
+    <section className="stack">
+      <h2 className="sr-only">Pessoas acompanhadas</h2>
       {error && <Notice tone="error">{error}</Notice>}
-      <ul className="plain">
-        {(persons.data ?? []).map((p) => (
-          <li key={p.id} className="row between">
-            <span className={p.active ? "" : "muted"}>
-              {p.displayName}{p.userId === me?.id ? " (você)" : ""}{p.birthDate ? ` · ${formatDate(p.birthDate + "T12:00:00")}` : ""}
-              {!p.active && " · inativo"}
-              {isPending(p) && <span className="badge badge-queued">Aguardando envio</span>}
-            </span>
-            <span className="row">
-              <button className="btn btn-small" disabled={busy} onClick={() => {
-                const newName = prompt("Nome", p.displayName);
-                if (newName?.trim()) void update(p, { displayName: newName.trim() });
-              }}>Renomear</button>
-              <button className="btn btn-small" disabled={busy} onClick={() => void update(p, { active: !p.active })}>
-                {p.active ? "Desativar" : "Reativar"}
-              </button>
-            </span>
-          </li>
-        ))}
+      <ul className="people-cards">
+        {[...active, ...inactive].map((p) => {
+          const day = summary(p.id);
+          return (
+            <li key={p.id} className={`item person-card ${p.active ? "" : "inactive"}`}>
+              <Avatar name={p.displayName} id={p.id} size={52} />
+              <span className="item-main">
+                <strong className="item-title">{p.userId === me?.id ? `${p.displayName} (você)` : p.displayName}</strong>
+                <span className="muted small">
+                  {p.active ? day.detail : "Inativo"}{p.birthDate ? ` · nasceu em ${formatDate(p.birthDate + "T12:00:00")}` : ""}
+                </span>
+                {isPending(p) && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+                <span className="row wrap person-actions">
+                  <button className="link small" disabled={busy} onClick={() => {
+                    const newName = prompt("Nome", p.displayName);
+                    if (newName?.trim()) void update(p, { displayName: newName.trim() });
+                  }}>Renomear</button>
+                  <button className="link small" disabled={busy} onClick={() => void update(p, { active: !p.active })}>
+                    {p.active ? "Desativar" : "Reativar"}
+                  </button>
+                </span>
+              </span>
+              {p.active && day.total > 0 && (
+                <ProgressRing light size={60} done={day.given} total={day.total}
+                  label={`${p.displayName}: ${day.given} de ${day.total} doses de hoje dadas`} />
+              )}
+            </li>
+          );
+        })}
       </ul>
+      <div className="card stack" id="nova-pessoa">
+      <h3>Nova pessoa</h3>
       <form onSubmit={(e) => void add(e)} className="stack">
         <div className="row wrap">
           <label className="grow">
@@ -248,6 +295,7 @@ function Persons() {
         )}
         <button className="btn" disabled={busy || !name.trim()}>Adicionar pessoa</button>
       </form>
+      </div>
     </section>
   );
 }
@@ -368,7 +416,7 @@ function PushSettings() {
     on: "Este aparelho recebe os lembretes e avisos.",
   };
   return (
-    <section className="card stack">
+    <section className="card stack" id="notificacoes">
       <h2>Notificações neste aparelho</h2>
       {state && <p className={state === "on" ? "" : "muted"}>{descriptions[state]}</p>}
       {error && <Notice tone="error">{error}</Notice>}

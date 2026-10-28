@@ -36,14 +36,44 @@ Plus Jakarta Sans (variável), servida pelo próprio app
 (`@fontsource-variable/plus-jakarta-sans`), porque a CSP só aceita fontes do
 mesmo endereço (`font-src 'self'`). Títulos em 800, botões em 700.
 
+## Telas (como nos quadros do design)
+
+- **Sem barra escura no topo.** Cada tela abre com título grande e uma linha
+  de apoio; telas internas (dose, tratamento, formulários) têm o botão
+  redondo de voltar e o título ao centro. O selo "N aguardando envio" flutua
+  no topo só quando há registro pendente ou recusado.
+- **Hoje:** cabeçalho escuro com avatar, saudação ("Boa tarde, Ana"), sino
+  (leva às notificações), "Hoje" com a data por extenso, selo de
+  sincronização e anel "X/Y dadas". O cartão **Próxima dose** se sobrepõe ao
+  cabeçalho. A lista mostra cada dose numa linha: horário, medicamento,
+  pessoa · dose e situação; "Dada no horário" quando o horário já chegou.
+- **Dose:** círculo menta grande com o ícone do medicamento, nome, pessoa,
+  selo do horário e da situação; depois a dose e a via em linhas com
+  divisória, o registro e as ações.
+- **Família:** título com o nome da família; cada pessoa com **avatar** (a
+  inicial num círculo colorido), resumo do dia e anel das doses de hoje;
+  responsáveis com avatar e papel; configurações abaixo.
+- **Saúde:** pessoa, botões "+ Aferição" e "+ Sintoma", sintomas em
+  andamento com ícone, e cada gráfico com o **último valor em destaque**.
+- **Tratamentos e Histórico:** cartões com ícone do medicamento (ou avatar
+  da pessoa), detalhe e situação.
+- **Entrar:** a marca grande sobre fundo tinta, com "O cuidado da família,
+  dose a dose".
+
 ## Componentes
 
-- **Topo e cabeçalho do dia** em tinta, com anel de progresso ("3/5 dadas") e
-  o cartão **Próxima dose** sobreposto.
+- **Avatar** (`components/Avatar.tsx`): inicial em tinta sobre uma de seis
+  cores claras, escolhida pelo id (a mesma pessoa tem sempre a mesma cor).
+  É decorativo: o nome aparece ao lado.
+- **Ícone em ladrilho:** quadrado arredondado menta com o ícone de traço
+  (medicamento, sintoma).
 - **Cartões** sem borda, com sombra suave e raio 22px.
-- **Barra de abas** flutuante em pílula escura; a aba atual fica clara.
+- **Barra de abas** flutuante em pílula escura, só com ícones (cada um com
+  nome acessível); a aba atual fica num círculo branco.
 - **Situação sempre com ícone e texto**, nunca só cor: relógio (prevista ou
   pendente), alerta (atrasada), certo (dada), lista (conferir), × (não dada) e
   setas (aguardando envio, com borda tracejada).
 - Botões e campos com no mínimo 48px de altura; a ação principal da dose tem
   60px.
+- **Tema escuro:** o item selecionado (filtros) fica em menta, porque a tinta
+  quase some no fundo escuro.

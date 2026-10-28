@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView } from "../api/types";
 import { Notice, Spinner } from "../components/Layout";
+import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { canRecordOnTime, OnTimeDialog } from "../components/OnTimeDialog";
 import { ProgressRing } from "../components/ProgressRing";
@@ -10,7 +11,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
 import { useOutbox } from "../hooks/useOutbox";
-import { addDays, formatDay, formatTime, sameDay, startOfDay } from "../lib/time";
+import { addDays, formatDay, formatLongDay, formatTime, greeting, sameDay, startOfDay } from "../lib/time";
 import { useFamily, useSession } from "../session";
 
 /** Tela inicial (seção 7.1): doses do dia, por pessoa. */
@@ -51,14 +52,30 @@ export function TodayPage() {
     `Dada no horário: ${o.treatment.name} de ${who(o)} às ${formatTime(o.scheduledAt)}`;
   const next = isToday ? doses.filter(open).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] : undefined;
 
+  const dayTitle = isToday ? "Hoje"
+    : sameDay(day, addDays(startOfDay(new Date()), -1)) ? "Ontem"
+    : sameDay(day, addDays(startOfDay(new Date()), 1)) ? "Amanhã" : formatDay(day);
+  const firstName = (me?.displayName ?? "").split(" ")[0];
+
   return (
-    <div className="page">
-      <section className="hero">
+    <div className="page page-today">
+      <section className={`hero ${next ? "hero-with-card" : ""}`}>
+        <div className="hero-hello">
+          {me && <Avatar name={me.displayName} id={me.id} size={44} />}
+          <span className="hero-hello-text">
+            <span className="hero-muted">{greeting()},</span>
+            <strong>{firstName}</strong>
+          </span>
+          <Link to="/familia#notificacoes" className="round-btn hero-btn" aria-label="Avisos e notificações" title="Avisos e notificações">
+            <Icon name="bell" />
+          </Link>
+        </div>
         <div className="hero-top">
           <div className="hero-day">
-            <div className="row">
+            <h1>{dayTitle}</h1>
+            <div className="day-nav">
               <button className="icon-btn" aria-label="Dia anterior" onClick={() => setDay(addDays(day, -1))}>‹</button>
-              <h1>{isToday ? "Hoje" : "Dia"} · {formatDay(day)}</h1>
+              <span className="hero-muted">{formatLongDay(day)}</span>
               <button className="icon-btn" aria-label="Próximo dia" onClick={() => setDay(addDays(day, 1))}>›</button>
             </div>
             <SyncStatus familyId={family.id} fresh={agenda.fresh} savedAt={agenda.savedAt} />
@@ -66,36 +83,36 @@ export function TodayPage() {
           </div>
           {counted.length > 0 && <ProgressRing done={given} total={counted.length} />}
         </div>
-        {next && (
-          <div className="next-dose">
-            <div className="row between">
-              <span className="eyebrow">Próxima dose</span>
-              <StatusBadge status={next.status} late={next.late} />
-            </div>
-            <div className="next-dose-main">
-              <span className="pill-icon"><Icon name="pill" size={26} /></span>
-              <span className="dose-main">
-                <strong className="next-dose-name">{next.treatment.name} · {formatTime(next.scheduledAt)}</strong>
-                <span className="muted">
-                  {mine.has(next.person.id) ? "Você" : next.person.displayName} · {next.treatment.prescribedDose}
-                </span>
-              </span>
-            </div>
-            <div className={canRecordOnTime(next, false) ? "next-dose-actions" : "stack"}>
-              {canRecordOnTime(next, false) && (
-                <button className="btn btn-primary" aria-label={onTimeLabel(next)} onClick={() => setOnTime(next)}>
-                  <Icon name="check" />Dada no horário
-                </button>
-              )}
-              <Link to={`/doses/${next.id}`} state={{ occurrence: next }}
-                className={`btn ${canRecordOnTime(next, false) ? "" : "btn-primary"}`}
-                aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${who(next)}`}>
-                Abrir dose
-              </Link>
-            </div>
-          </div>
-        )}
       </section>
+      {next && (
+        <div className="next-dose">
+          <div className="row between">
+            <span className="eyebrow">Próxima dose</span>
+            <StatusBadge status={next.status} late={next.late} />
+          </div>
+          <div className="next-dose-main">
+            <span className="pill-icon"><Icon name="pill" size={28} /></span>
+            <span className="dose-main">
+              <strong className="next-dose-name">{next.treatment.name} · {formatTime(next.scheduledAt)}</strong>
+              <span className="muted">
+                {mine.has(next.person.id) ? "Você" : next.person.displayName} · {next.treatment.prescribedDose}
+              </span>
+            </span>
+          </div>
+          <div className={canRecordOnTime(next, false) ? "next-dose-actions" : "stack"}>
+            {canRecordOnTime(next, false) && (
+              <button className="btn btn-primary" aria-label={onTimeLabel(next)} onClick={() => setOnTime(next)}>
+                <Icon name="check" />Dada no horário
+              </button>
+            )}
+            <Link to={`/doses/${next.id}`} state={{ occurrence: next }}
+              className={`btn ${canRecordOnTime(next, false) ? "" : "btn-primary"}`}
+              aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${who(next)}`}>
+              Abrir dose
+            </Link>
+          </div>
+        </div>
+      )}
 
       {review > 0 && (
         <Notice tone="warn">
@@ -107,11 +124,6 @@ export function TodayPage() {
           <Link to="/conflitos">{treatmentReview === 1 ? "1 alteração de tratamento precisa" : `${treatmentReview} alterações de tratamento precisam`} de conferência →</Link>
         </Notice>
       )}
-
-      <div className="row wrap quick">
-        <Link className="btn btn-small" to={`/saude/aferir${personId ? `?pessoa=${personId}` : ""}`}>+ Aferição</Link>
-        <Link className="btn btn-small" to={`/saude/sintoma${personId ? `?pessoa=${personId}` : ""}`}>+ Sintoma</Link>
-      </div>
 
       <div className="chips" role="group" aria-label="Filtrar por pessoa">
         <button className={`chip ${personId === null ? "chip-on" : ""}`} onClick={() => setPersonId(null)}>Todos</button>
@@ -131,7 +143,6 @@ export function TodayPage() {
       <ul className="doses">
         {doses.map((o) => {
           const pending = queued.get(o.id);
-          const open = o.status === "PENDING" || o.status === "SCHEDULED";
           const quick = canRecordOnTime(o, !!pending);
           return (
             <li key={o.id} className="dose-row">
@@ -139,9 +150,8 @@ export function TodayPage() {
                 className={`dose ${o.late && !pending ? "dose-late" : ""} ${quick ? "dose-has-quick" : ""}`}>
                 <span className="dose-time">{formatTime(o.scheduledAt)}</span>
                 <span className="dose-main">
-                  <strong>{mine.has(o.person.id) ? "Você" : o.person.displayName}</strong>
-                  <span>{o.treatment.name}</span>
-                  <span className="muted small">{o.treatment.prescribedDose}</span>
+                  <strong>{o.treatment.name}</strong>
+                  <span className="muted small">{mine.has(o.person.id) ? "Você" : o.person.displayName} · {o.treatment.prescribedDose}</span>
                   {o.administration && (
                     <span className="muted small">
                       {formatTime(o.administration.administeredAt)} · {o.administration.recordedBy?.displayName}
@@ -150,7 +160,6 @@ export function TodayPage() {
                 </span>
                 <span className="dose-side">
                   <StatusBadge status={o.status} late={o.late} queued={pending?.state === "pending"} />
-                  {open && !pending && <span className="btn btn-small btn-primary">Registrar</span>}
                 </span>
               </Link>
               {quick && (

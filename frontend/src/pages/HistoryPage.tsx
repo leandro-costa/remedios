@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import type { MemberView, OccurrenceView, PersonView, TreatmentView } from "../api/types";
+import { Avatar } from "../components/Avatar";
 import { Notice, Spinner } from "../components/Layout";
+import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
 import { addDays, formatTime, formatWhen, startOfDay } from "../lib/time";
@@ -34,7 +36,7 @@ export function HistoryPage() {
 
   return (
     <div className="page">
-      <h1>Histórico</h1>
+      <PageHeader title="Histórico" subtitle="Quem deu, o quê e quando" />
       <div className="filters">
         <label>
           Pessoa
@@ -72,17 +74,20 @@ export function HistoryPage() {
       <ul className="cards">
         {(history.data ?? []).map((o) => (
           <li key={o.id}>
-            <Link to={`/doses/${o.id}`} state={{ occurrence: o }} className="card card-link">
-              <span className="row between">
-                <strong>{formatWhen(o.administration?.administeredAt ?? o.statusChangedAt ?? o.scheduledAt)}</strong>
-                <StatusBadge status={o.status} />
+            <Link to={`/doses/${o.id}`} state={{ occurrence: o }} className="item history-item">
+              <Avatar name={o.person.displayName} id={o.person.id} size={44} />
+              <span className="item-main">
+                <span className="row between wrap">
+                  <strong>{formatWhen(o.administration?.administeredAt ?? o.statusChangedAt ?? o.scheduledAt)}</strong>
+                  <StatusBadge status={o.status} />
+                </span>
+                <span>{o.person.displayName} · {o.treatment.name}</span>
+                <span className="muted small">
+                  Previsto {formatTime(o.scheduledAt)} · Registrado por {o.administration?.recordedBy?.displayName ?? o.statusChangedBy?.displayName ?? "—"}
+                  {o.administration ? ` às ${formatTime(o.administration.recordedAt)}` : ""}
+                </span>
+                {o.statusReason && <span className="small">{o.statusReason}</span>}
               </span>
-              <span>{o.person.displayName} · {o.treatment.name}</span>
-              <span className="muted small">
-                Previsto {formatTime(o.scheduledAt)} · Registrado por {o.administration?.recordedBy?.displayName ?? o.statusChangedBy?.displayName ?? "—"}
-                {o.administration ? ` às ${formatTime(o.administration.recordedAt)}` : ""}
-              </span>
-              {o.statusReason && <span className="small">{o.statusReason}</span>}
             </Link>
           </li>
         ))}

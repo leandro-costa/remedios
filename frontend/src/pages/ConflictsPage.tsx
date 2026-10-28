@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { MemberView, OccurrenceDetail, TreatmentConflictView, TreatmentProposal, TreatmentView } from "../api/types";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { TREATMENT_STATUS } from "../lib/labels";
@@ -21,7 +22,7 @@ export function ConflictsPage() {
   const empty = conflicts.data?.length === 0 && treatments.data?.length === 0;
   return (
     <div className="page">
-      <h1>Para conferir</h1>
+      <ScreenBar title="Para conferir" />
       <p className="muted">Registros e alterações feitos em aparelhos diferentes que não combinam. Nenhum foi aplicado automaticamente.</p>
       {conflicts.loading && !conflicts.data && <Spinner />}
       {conflicts.error && !conflicts.data && <Notice tone="error">{conflicts.error}</Notice>}

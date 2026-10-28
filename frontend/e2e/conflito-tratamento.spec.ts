@@ -55,11 +55,11 @@ test("dois aparelhos offline alteram o mesmo tratamento: a segunda alteração v
 
   // A Ana volta primeiro: a alteração dela vale
   await goOnline(ana.context, p);
-  await expect(p.locator(".topbar")).not.toContainText("aguardando envio", { timeout: 15_000 });
+  await expect(p.locator(".queue-float")).not.toContainText("aguardando envio", { timeout: 15_000 });
 
   // O Bruno volta depois: a alteração dele não é aplicada nem perdida
   await goOnline(bruno.context, b);
-  await expect(b.locator(".topbar")).not.toContainText("aguardando envio", { timeout: 15_000 });
+  await expect(b.locator(".queue-float")).not.toContainText("aguardando envio", { timeout: 15_000 });
   await b.reload();
   await expect(b.getByText("7 ml", { exact: true })).toBeVisible();
   await expect(b.getByText("Há uma alteração feita sem conexão aguardando conferência")).toBeVisible();

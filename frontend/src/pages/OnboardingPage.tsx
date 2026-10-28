@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { FamilyView } from "../api/types";
+import { Mark } from "../components/Icon";
 import { Notice } from "../components/Layout";
 import { useOnline } from "../hooks/useOnline";
 import { useSession } from "../session";
@@ -44,7 +45,11 @@ export function OnboardingPage() {
 
   return (
     <div className="page narrow">
-      <h1>Olá, {session.me?.displayName}</h1>
+      <div className="brand brand-small">
+        <Mark className="brand-mark" />
+        <h1>Olá, {session.me?.displayName}</h1>
+        <p className="brand-tagline">Crie a família ou entre com um convite.</p>
+      </div>
       {!online && <Notice tone="warn">Sem conexão. Entrar numa família ou criar uma precisa de internet: o convite é conferido pelo servidor, e a família precisa existir lá para os outros responsáveis entrarem.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 

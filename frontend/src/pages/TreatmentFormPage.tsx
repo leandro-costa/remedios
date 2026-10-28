@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, ApiError, errorMessage } from "../api/client";
 import type { PersonView, TreatmentKind, TreatmentView } from "../api/types";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
 import { useCached } from "../hooks/useCached";
@@ -137,7 +138,7 @@ export function TreatmentFormPage() {
   if (reviewing) {
     return (
       <div className="page">
-        <h1>Confira antes de salvar</h1>
+        <ScreenBar title="Confira antes de salvar" onBack={() => setReviewing(false)} />
         <dl className="facts card">
           <dt>Pessoa</dt><dd>{person?.displayName ?? "—"}</dd>
           <dt>Medicamento</dt><dd>{form.name}</dd>
@@ -164,7 +165,7 @@ export function TreatmentFormPage() {
 
   return (
     <form className="page stack" onSubmit={review}>
-      <h1>{editing ? "Alterar tratamento" : "Novo tratamento"}</h1>
+      <ScreenBar title={editing ? "Alterar tratamento" : "Novo tratamento"} />
       {error && <Notice tone="error">{error}</Notice>}
       {stale && (
         <Notice tone="warn">

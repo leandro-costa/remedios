@@ -48,7 +48,7 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await expect(chart).toBeVisible();
 
   // Linha de referência da família
-  await p.getByRole("button", { name: "+ Referência" }).click();
+  await p.getByRole("button", { name: "+ Linha de referência" }).click();
   await p.locator(".reference-editor input").first().fill("37,8");
   await p.getByLabel("Origem da orientação").fill("Orientação do pediatra");
   await p.getByRole("button", { name: "Salvar referência" }).click();
@@ -57,7 +57,7 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   // Tocar num ponto mostra o valor e a última dose antes dele. Espera a fila
   // enviar a referência (a tela recarrega os dados e pode se reorganizar) e
   // repete o gesto se o gráfico mudou de lugar no meio dele.
-  await expect(p.locator(".topbar")).not.toContainText("aguardando envio");
+  await expect(p.locator(".queue-float")).not.toContainText("aguardando envio");
   await expect(async () => {
     const marker = await p.locator(".chart .marker-1").nth(1).boundingBox();
     await p.mouse.move(0, 0);

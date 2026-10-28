@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import type { MeasurementType, PersonView } from "../api/types";
 import { api } from "../api/client";
+import { ScreenBar } from "../components/ScreenBar";
 import { Notice } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { MEASUREMENT_TYPES, parseNumber, TYPE_ORDER } from "../lib/health";
@@ -60,7 +61,7 @@ export function MeasurementFormPage() {
 
   return (
     <form className="page stack" onSubmit={(e) => void submit(e)}>
-      <h1>Nova aferição{person ? ` · ${person.displayName}` : ""}</h1>
+      <ScreenBar title={`Nova aferição${person ? ` · ${person.displayName}` : ""}`} />
       {error && <Notice tone="error">{error}</Notice>}
       {(persons.data?.length ?? 0) > 1 && (
         <label>
