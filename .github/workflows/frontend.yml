@@ -48,6 +48,9 @@ jobs:
       - name: Teste de restauração do backup
         run: scripts/restore-test.sh --exigir-dados
       - if: failure()
-        run: docker compose logs api web
+        run: |
+          docker compose ps -a
+          docker inspect --format '{{json .State.Health}}' remedios-api-1 || true
+          docker compose logs api web
       - if: always()
         run: docker compose down -v
