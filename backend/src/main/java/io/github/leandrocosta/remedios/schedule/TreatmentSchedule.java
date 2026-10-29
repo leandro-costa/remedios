@@ -4,11 +4,9 @@ import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.LockModeType;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -57,12 +55,6 @@ public class TreatmentSchedule extends PanacheEntityBase {
 
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
-
-    public static Optional<TreatmentSchedule> lockCurrent(UUID treatmentId) {
-        return find("treatmentId = ?1 and validUntil is null", treatmentId)
-                .withLock(LockModeType.PESSIMISTIC_WRITE)
-                .firstResultOptional();
-    }
 
     public static long lastVersion(UUID treatmentId) {
         return getEntityManager()

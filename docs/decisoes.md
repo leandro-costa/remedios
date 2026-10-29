@@ -201,6 +201,12 @@ São parâmetros operacionais, não orientação clínica.
   (agenda, início ou término alterados, suspensão e reativação), a versão atual
   é encerrada, as doses futuras em aberto são canceladas e outra versão começa.
   Doses passadas continuam ligadas à versão que as gerou.
+  O corte vale para **todas** as versões a partir da vigência da alteração,
+  não só a mais recente: uma versão programada para começar depois fica
+  substituída, e as doses em aberto do tratamento a partir dali são canceladas.
+  Antes, uma alteração com vigência anterior ao início de outra ainda não
+  iniciada deixava doses em duplicidade; a migração V8 cancelou as que já
+  existiam (só doses em aberto de versões substituídas).
 - **Horizonte de 14 dias** (decisão em aberto 3), estendido por um job a cada
   hora e idempotente (`UNIQUE(schedule_id, slot_key)` + `ON CONFLICT DO
   NOTHING`). Configurável em `remedios.schedule.horizon`.

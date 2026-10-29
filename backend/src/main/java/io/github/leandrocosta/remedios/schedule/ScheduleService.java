@@ -85,33 +85,47 @@ public class ScheduleService {
     }
 
     /**
-     * Encerra a versão vigente em {@code effectiveFrom} e cancela as doses em
-     * aberto a partir dali. Doses anteriores e doses já registradas não mudam.
+     * Encerra a agenda em {@code effectiveFrom} e cancela as doses em aberto
+     * do tratamento a partir dali. Doses anteriores e doses já registradas não
+     * mudam.
+     *
+     * <p>Vale para todas as versões, não só a vigente: uma alteração anterior
+     * pode ter deixado uma versão programada para começar depois de
+     * {@code effectiveFrom}, e a versão de antes continuaria com doses em
+     * aberto nesse intervalo (que a nova versão geraria de novo, em
+     * duplicidade). Versões que ainda não começaram ficam substituídas.
      *
      * @return quantidade de doses canceladas
      */
     @Transactional(Transactional.TxType.MANDATORY)
     public int stop(Treatment treatment, Instant effectiveFrom, UUID actor, String reason) {
-        TreatmentSchedule s = TreatmentSchedule.lockCurrent(treatment.id).orElse(null);
-        if (s == null) {
+        List<TreatmentSchedule> versions = TreatmentSchedule.<TreatmentSchedule>find(
+                "treatmentId = ?1 and (validUntil is null or validUntil > ?2)", treatment.id, effectiveFrom)
+                .withLock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+                .list();
+        if (versions.isEmpty()) {
             return 0;
         }
-        Instant until = effectiveFrom.isBefore(s.validFrom) ? s.validFrom : effectiveFrom;
-        s.validUntil = until;
+        for (TreatmentSchedule s : versions) {
+            s.validUntil = max(effectiveFrom, s.validFrom);
+        }
+        // A versão que começaria depois termina no próprio início (vigência vazia)
+        // antes de a nova versão vigente ser criada (índice único da vigente).
+        em.flush();
         Instant now = Instant.now();
         return em.createQuery("""
                 update DoseOccurrence o
                    set o.status = :cancelled, o.statusReason = :reason, o.statusChangedBy = :actor,
                        o.statusChangedAt = :now, o.updatedAt = :now, o.version = o.version + 1
-                 where o.scheduleId = :schedule and o.status = :open and o.scheduledAt >= :from
+                 where o.treatmentId = :treatment and o.status = :open and o.scheduledAt >= :from
                 """)
                 .setParameter("cancelled", DoseOccurrence.Status.CANCELLED)
                 .setParameter("open", DoseOccurrence.Status.SCHEDULED)
                 .setParameter("reason", reason)
                 .setParameter("actor", actor)
                 .setParameter("now", now)
-                .setParameter("schedule", s.id)
-                .setParameter("from", until)
+                .setParameter("treatment", treatment.id)
+                .setParameter("from", effectiveFrom)
                 .executeUpdate();
     }
 
