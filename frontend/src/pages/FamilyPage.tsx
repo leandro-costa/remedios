@@ -386,11 +386,21 @@ function Preferences() {
       {toggle("vibrationEnabled", "Vibração")}
       {toggle("confirmationNotifications", "Avisar a cada dose registrada por outro responsável")}
       {toggle("lockScreenDetails", "Mostrar pessoa e medicamento no aviso (tela bloqueada)")}
-      {toggle("quietHoursEnabled", "Horário de silêncio")}
+      <label className="switch">
+        <span>Horário de silêncio</span>
+        {/* Ligar já leva início e fim (o servidor exige os dois); a pessoa ajusta em seguida. */}
+        <input type="checkbox" checked={Boolean(p.quietHoursEnabled)} disabled={busy}
+          onChange={(e) => save(e.target.checked
+            ? { quietHoursEnabled: true, quietHoursStart: p.quietHoursStart ?? "22:00", quietHoursEnd: p.quietHoursEnd ?? "07:00" }
+            : { quietHoursEnabled: false })} />
+      </label>
       {p.quietHoursEnabled && (
         <div className="row wrap">
-          <label>De <input type="time" value={p.quietHoursStart?.slice(0, 5) ?? ""} onChange={(e) => save({ quietHoursStart: e.target.value })} /></label>
-          <label>Até <input type="time" value={p.quietHoursEnd?.slice(0, 5) ?? ""} onChange={(e) => save({ quietHoursEnd: e.target.value })} /></label>
+          {/* Campo apagado (meio de uma edição) não é enviado: ficaria sem início ou fim. */}
+          <label>Início do silêncio <input type="time" value={p.quietHoursStart?.slice(0, 5) ?? ""}
+            onChange={(e) => e.target.value && save({ quietHoursStart: e.target.value })} /></label>
+          <label>Fim do silêncio <input type="time" value={p.quietHoursEnd?.slice(0, 5) ?? ""}
+            onChange={(e) => e.target.value && save({ quietHoursEnd: e.target.value })} /></label>
         </div>
       )}
       {p.quietHoursEnabled && <p className="muted small">No horário de silêncio você não recebe lembretes de dose. Conflitos e lembretes que você mesmo criou continuam chegando.</p>}

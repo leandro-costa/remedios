@@ -17,6 +17,23 @@ test("estou cuidando da dose, notificações e lembretes avulsos", async ({ brow
   await expect(p.getByRole("button", { name: "Ativar notificações" })).toBeVisible();
   await expect(p.getByText("Mostrar pessoa e medicamento no aviso (tela bloqueada)")).toBeVisible();
 
+  // Horário de silêncio: ligar já traz início e fim, que ficam e podem ser ajustados.
+  await p.getByRole("checkbox", { name: "Horário de silêncio" }).click();
+  await expect(p.getByLabel("Início do silêncio")).toHaveValue("22:00");
+  await expect(p.getByLabel("Fim do silêncio")).toHaveValue("07:00");
+  await p.waitForTimeout(500);
+  await expect(p.getByRole("checkbox", { name: "Horário de silêncio" })).toBeChecked();
+  await expect(p.getByText("Informe início e fim do horário de silêncio.")).toHaveCount(0);
+  // Só recarrega depois que a mudança chegou à API.
+  const salvo = p.waitForResponse((r) => r.url().endsWith("/api/me/notification-settings")
+    && r.request().method() === "PUT" && (r.request().postData() ?? "").includes("23:30") && r.ok());
+  await p.getByLabel("Início do silêncio").fill("23:30");
+  await salvo;
+  await p.reload();
+  await expect(p.getByRole("checkbox", { name: "Horário de silêncio" })).toBeChecked();
+  await expect(p.getByLabel("Início do silêncio")).toHaveValue("23:30");
+  await expect(p.getByLabel("Fim do silêncio")).toHaveValue("07:00");
+
   // Convida Bruno
   await p.getByRole("button", { name: "Convidar responsável" }).click();
   const code = (await p.getByTestId("invite-code").textContent())!.trim();
