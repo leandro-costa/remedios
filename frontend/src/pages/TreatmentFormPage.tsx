@@ -8,10 +8,19 @@ import { ScheduleEditor } from "../components/ScheduleEditor";
 import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { TREATMENT_KIND } from "../lib/labels";
-import { describeSchedule, emptyScheduleForm, formFromRule, ruleFromForm, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
-import { deviceTimezone, formatDate, fromLocalInput, startOfDay, toLocalInput } from "../lib/time";
+import { describeSchedule, dosesInDays, emptyScheduleForm, formFromRule, planCourse, ruleFromForm, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
+import { deviceTimezone, formatWhen, fromLocalInput, startOfDay, toLocalInput } from "../lib/time";
 import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
+
+type EndMode = "NONE" | "DATE" | "DAYS" | "DOSES";
+
+const END_MODES: { value: EndMode; label: string }[] = [
+  { value: "NONE", label: "Sem término" },
+  { value: "DATE", label: "Até uma data" },
+  { value: "DAYS", label: "Por dias" },
+  { value: "DOSES", label: "Por doses" },
+];
 
 interface Form {
   personId: string;
@@ -21,7 +30,11 @@ interface Form {
   route: string;
   instructions: string;
   startAt: string;
+  /** Término: sem, até uma data, por N dias (vira doses pela agenda) ou por N doses. */
+  endMode: EndMode;
   endAt: string;
+  days: string;
+  doses: string;
   schedule: ScheduleForm;
   effectiveFrom: string;
   reason: string;
@@ -31,7 +44,8 @@ function emptyForm(): Form {
   const now = new Date();
   return {
     personId: "", name: "", kind: "CONTINUOUS", prescribedDose: "", route: "", instructions: "",
-    startAt: toLocalInput(startOfDay(now)), endAt: "", schedule: emptyScheduleForm(deviceTimezone()),
+    startAt: toLocalInput(startOfDay(now)), endMode: "NONE", endAt: "", days: "", doses: "",
+    schedule: emptyScheduleForm(deviceTimezone()),
     effectiveFrom: toLocalInput(now), reason: "",
   };
 }
@@ -40,7 +54,9 @@ function formFrom(t: TreatmentView): Form {
   return {
     personId: t.personId, name: t.name, kind: t.kind, prescribedDose: t.prescribedDose, route: t.route ?? "",
     instructions: t.instructions ?? "", startAt: toLocalInput(new Date(t.startAt)),
-    endAt: t.endAt ? toLocalInput(new Date(t.endAt)) : "", schedule: formFromRule(t.schedule, deviceTimezone()),
+    endMode: t.doseCount ? "DOSES" : t.endAt ? "DATE" : "NONE",
+    endAt: t.endAt ? toLocalInput(new Date(t.endAt)) : "", days: "", doses: t.doseCount ? String(t.doseCount) : "",
+    schedule: formFromRule(t.schedule, deviceTimezone()),
     effectiveFrom: toLocalInput(new Date()), reason: "",
   };
 }
@@ -77,9 +93,26 @@ export function TreatmentFormPage() {
     e.preventDefault();
     const problem = validateScheduleForm(form.schedule);
     if (problem) return setError(problem);
-    if (form.endAt && new Date(form.endAt) <= new Date(form.startAt)) return setError("O término deve ser depois do início.");
+    if (form.endMode === "DATE" && !form.endAt) return setError("Informe a data de término.");
+    if (form.endMode === "DATE" && new Date(form.endAt) <= new Date(form.startAt)) return setError("O término deve ser depois do início.");
+    if (form.endMode !== "NONE" && form.endMode !== "DATE") {
+      const count = doseCount();
+      if (count === null) return setError("Não foi possível contar as doses desta agenda neste aparelho: informe o término por número de doses.");
+      if (count < 1 || count > 2000) return setError(form.endMode === "DAYS" ? "Informe de 1 a 2000 doses (confira os dias)." : "Informe de 1 a 2000 doses.");
+    }
     setError(null);
     setReviewing(true);
+  }
+
+  /** Total de doses: o informado, ou o que cabe em N dias a partir da primeira dose. */
+  function doseCount(): number | null {
+    if (form.endMode === "DOSES") return Number(form.doses) || 0;
+    if (form.endMode === "DAYS") {
+      const days = Number(form.days);
+      if (!days || days < 1) return 0;
+      return dosesInDays(ruleFromForm(form.schedule), new Date(form.startAt), days);
+    }
+    return null;
   }
 
   async function save() {
@@ -88,7 +121,9 @@ export function TreatmentFormPage() {
     const body = {
       name: form.name.trim(), kind: form.kind, prescribedDose: form.prescribedDose.trim(),
       route: form.route.trim() || null, instructions: form.instructions.trim() || null,
-      startAt: fromLocalInput(form.startAt), endAt: form.endAt ? fromLocalInput(form.endAt) : null,
+      startAt: fromLocalInput(form.startAt),
+      endAt: form.endMode === "DATE" && form.endAt ? fromLocalInput(form.endAt) : null,
+      doseCount: form.endMode === "DAYS" || form.endMode === "DOSES" ? doseCount() : null,
       schedule: ruleFromForm(form.schedule),
     };
     try {
@@ -134,6 +169,18 @@ export function TreatmentFormPage() {
   }
 
   const person = persons.data?.find((p) => p.id === form.personId);
+  const count = form.endMode === "DAYS" || form.endMode === "DOSES" ? doseCount() : null;
+  const plan = reviewing ? planCourse(ruleFromForm(form.schedule), new Date(form.startAt), {
+    doseCount: count, endAt: form.endMode === "DATE" && form.endAt ? new Date(form.endAt) : null,
+  }) : null;
+  const describeEnd = () => {
+    switch (form.endMode) {
+      case "NONE": return "Sem término";
+      case "DATE": return formatWhen(fromLocalInput(form.endAt));
+      case "DAYS": return `Por ${form.days} ${Number(form.days) === 1 ? "dia" : "dias"} (${count} doses)`;
+      case "DOSES": return `Após ${form.doses} ${Number(form.doses) === 1 ? "dose" : "doses"}`;
+    }
+  };
 
   if (reviewing) {
     return (
@@ -147,8 +194,17 @@ export function TreatmentFormPage() {
           {form.instructions && (<><dt>Instruções</dt><dd>{form.instructions}</dd></>)}
           <dt>Tipo</dt><dd>{TREATMENT_KIND[form.kind]}</dd>
           <dt>Agenda</dt><dd>{describeSchedule(ruleFromForm(form.schedule))}</dd>
-          <dt>Início</dt><dd>{formatDate(fromLocalInput(form.startAt))}</dd>
-          <dt>Término</dt><dd>{form.endAt ? formatDate(fromLocalInput(form.endAt)) : "Sem término"}</dd>
+          <dt>Primeira dose</dt><dd>{formatWhen(fromLocalInput(form.startAt))}</dd>
+          <dt>Término</dt><dd>{describeEnd()}</dd>
+          {plan && plan.count > 0 && (
+            <>
+              <dt>Duração</dt>
+              <dd data-testid="course-plan">
+                {plan.count} {plan.count === 1 ? "dose" : "doses"} · {plan.days} {plan.days === 1 ? "dia" : "dias"}
+                <br /><span className="muted small">primeira {formatWhen(plan.first!.toISOString())} · última {formatWhen(plan.last!.toISOString())}</span>
+              </dd>
+            </>
+          )}
           {current && (<><dt>Vale a partir de</dt><dd>{new Date(form.effectiveFrom).toLocaleString("pt-BR")}</dd></>)}
         </dl>
         {!online && <Notice tone="warn">Sem conexão: fica guardado neste aparelho e é enviado quando a conexão voltar.</Notice>}
@@ -213,17 +269,45 @@ export function TreatmentFormPage() {
           <option value="OCCASIONAL">{TREATMENT_KIND.OCCASIONAL}</option>
         </select>
       </label>
-      <div className="row wrap">
-        <label>
-          Início
-          <input type="datetime-local" value={form.startAt} onChange={(e) => set({ startAt: e.target.value })} required />
-        </label>
-        <label>
-          Término <span className="muted small">(opcional)</span>
-          <input type="datetime-local" value={form.endAt} onChange={(e) => set({ endAt: e.target.value })} />
-        </label>
-      </div>
       <ScheduleEditor value={form.schedule} onChange={(schedule) => set({ schedule })} />
+      <label>
+        Primeira dose (data e hora)
+        <input type="datetime-local" value={form.startAt} onChange={(e) => set({ startAt: e.target.value })} required />
+        <span className="muted small">Já em andamento? Informe a primeira dose de fato: as anteriores a agora contam no total.</span>
+      </label>
+      <fieldset className="stack">
+        <legend>Término</legend>
+        <div className="chips" role="radiogroup" aria-label="Término">
+          {END_MODES.map((m) => (
+            <button key={m.value} type="button" role="radio" aria-checked={form.endMode === m.value}
+              className={`chip ${form.endMode === m.value ? "chip-on" : ""}`} onClick={() => set({ endMode: m.value })}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {form.endMode === "DATE" && (
+          <label>
+            Data e hora do término
+            <input type="datetime-local" value={form.endAt} onChange={(e) => set({ endAt: e.target.value })} required />
+          </label>
+        )}
+        {form.endMode === "DAYS" && (
+          <label>
+            Quantos dias
+            <input type="number" inputMode="numeric" min={1} max={365} className="short" value={form.days}
+              onChange={(e) => set({ days: e.target.value })} required />
+            <span className="muted small">Contados a partir da primeira dose; o app transforma em número de doses pela agenda.</span>
+          </label>
+        )}
+        {form.endMode === "DOSES" && (
+          <label>
+            Quantas doses no total
+            <input type="number" inputMode="numeric" min={1} max={2000} className="short" value={form.doses}
+              onChange={(e) => set({ doses: e.target.value })} required />
+            <span className="muted small">Como na receita (ex.: 5 dias, 2 vezes ao dia = 10). Dose não dada conta e não é reposta.</span>
+          </label>
+        )}
+      </fieldset>
       {current && (
         <>
           <label>

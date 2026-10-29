@@ -50,7 +50,7 @@ public class TreatmentService {
     private static final String CONFLICT_REASON = "Alteração feita sem conexão sobre uma versão anterior do tratamento";
 
     public record TreatmentData(String name, Treatment.Kind kind, String prescribedDose, String route,
-            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule) {
+            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule, Integer doseCount) {
     }
 
     public record Change(long baseVersion, Instant effectiveFrom, String reason) {
@@ -446,7 +446,8 @@ public class TreatmentService {
     private static boolean affectsSchedule(Map<String, Object> before, Map<String, Object> after) {
         return !Objects.equals(before.get("schedule"), after.get("schedule"))
                 || !Objects.equals(before.get("startAt"), after.get("startAt"))
-                || !Objects.equals(before.get("endAt"), after.get("endAt"));
+                || !Objects.equals(before.get("endAt"), after.get("endAt"))
+                || !Objects.equals(before.get("doseCount"), after.get("doseCount"));
     }
 
     private static ApiException scheduleRequired() {
@@ -487,6 +488,13 @@ public class TreatmentService {
         if (data.endAt() != null && !data.endAt().isAfter(data.startAt())) {
             throw ApiException.unprocessable("INVALID_PERIOD", "O término deve ser posterior ao início.");
         }
+        if (data.doseCount() != null && data.endAt() != null) {
+            throw ApiException.unprocessable("END_OR_COUNT",
+                    "Informe o término por data ou por número de doses, não os dois.");
+        }
+        if (data.doseCount() != null && (data.doseCount() < 1 || data.doseCount() > 2000)) {
+            throw ApiException.unprocessable("INVALID_DOSE_COUNT", "O número de doses deve estar entre 1 e 2000.");
+        }
     }
 
     private void apply(Treatment t, TreatmentData data) {
@@ -498,6 +506,7 @@ public class TreatmentService {
         t.instructions = Texts.clean(data.instructions());
         t.startAt = data.startAt();
         t.endAt = data.endAt();
+        t.doseCount = data.doseCount();
     }
 
     private static boolean sameContent(Map<String, Object> a, Map<String, Object> b) {
@@ -515,6 +524,7 @@ public class TreatmentService {
         m.put("status", t.status.name());
         m.put("startAt", t.startAt.toString());
         m.put("endAt", t.endAt == null ? null : t.endAt.toString());
+        m.put("doseCount", t.doseCount);
         m.put("schedule", t.scheduleRule);
         m.put("version", t.version);
         return m;

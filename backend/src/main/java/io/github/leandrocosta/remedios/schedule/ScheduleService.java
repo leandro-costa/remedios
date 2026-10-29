@@ -140,9 +140,15 @@ public class ScheduleService {
             return 0;
         }
         List<OccurrenceSlots.Slot> slots = OccurrenceSlots.between(fromStored(s.rule), t.startAt, from, to);
+        // Término por número de doses: só até completar o total. Canceladas não
+        // contam; dadas, não dadas e em aberto contam (dose perdida não é reposta).
+        long remaining = t.doseCount == null ? Long.MAX_VALUE : t.doseCount - countPlanned(t);
         Instant now = Instant.now();
         int created = 0;
         for (OccurrenceSlots.Slot slot : slots) {
+            if (created >= remaining) {
+                break;
+            }
             created += em.createNativeQuery("""
                     INSERT INTO dose_occurrence (id, family_id, treatment_id, schedule_id, slot_key, scheduled_at,
                                                  schedule_version, status, version, created_at, updated_at)
@@ -162,6 +168,16 @@ public class ScheduleService {
         }
         s.generatedUntil = to;
         return created;
+    }
+
+    /** Doses do tratamento que contam no total (todas, menos as canceladas). */
+    public long countPlanned(Treatment t) {
+        return em.createQuery("""
+                select count(o) from DoseOccurrence o where o.treatmentId = :t and o.status <> :cancelled
+                """, Long.class)
+                .setParameter("t", t.id)
+                .setParameter("cancelled", DoseOccurrence.Status.CANCELLED)
+                .getSingleResult();
     }
 
     /**

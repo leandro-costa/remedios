@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
-import type { PersonView, TreatmentStatus, TreatmentView } from "../api/types";
+import type { PersonView, TreatmentProgressView, TreatmentStatus, TreatmentView } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
@@ -27,6 +27,9 @@ export function TreatmentsPage() {
   const [filter, setFilter] = useState<TreatmentStatus | "ALL">("ALL");
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
+  const progress = useCached(`treatment-progress:${family.id}`, () =>
+    api<TreatmentProgressView[]>(`/families/${family.id}/treatments/progress`));
+  const progressOf = (id: string) => progress.data?.find((p) => p.treatmentId === id);
 
   const list = (treatments.data ?? []).filter((t) => filter === "ALL" || t.status === filter);
   const groups = (persons.data ?? [])
@@ -59,7 +62,15 @@ export function TreatmentsPage() {
                   <span className="tile"><Icon name="pill" /></span>
                   <span className="item-main">
                     <strong className="item-title">{t.name}</strong>
-                    <span className="muted small">{t.prescribedDose} · {describeSchedule(t.schedule)}</span>
+                    <span className="muted small">
+                      {t.prescribedDose} · {describeSchedule(t.schedule)}
+                      {t.doseCount ? ` · ${t.doseCount} ${t.doseCount === 1 ? "dose" : "doses"}` : ""}
+                    </span>
+                    {(() => {
+                      const p = progressOf(t.id);
+                      if (!p || p.total === null || t.status === "DRAFT") return null;
+                      return <span className="small">{p.administered} de {p.total} dadas{p.notAdministered ? ` · ${p.notAdministered} não dadas` : ""}</span>;
+                    })()}
                     <span className="row wrap">
                       <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
                       {isPending(t) && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}

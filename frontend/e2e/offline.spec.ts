@@ -28,7 +28,7 @@ test("cadastros offline aparecem na hora e sincronizam ao voltar a conexão", as
   await p.getByLabel("Pessoa").selectOption({ label: "Lia" });
   await p.getByLabel("Medicamento").fill("Antibiótico");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
-  await p.getByLabel("Início").fill(YESTERDAY);
+  await p.getByLabel("Primeira dose (data e hora)").fill(YESTERDAY);
   await p.getByLabel("Horário 1", { exact: true }).fill(T_MINUS_60);
   await p.getByRole("button", { name: "Conferir" }).click();
   await expect(p.getByText("Sem conexão: fica guardado neste aparelho")).toBeVisible();

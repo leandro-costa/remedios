@@ -110,6 +110,8 @@ export interface TreatmentView {
   status: TreatmentStatus;
   startAt: string;
   endAt: string | null;
+  /** Término por número de doses (excludente com endAt). */
+  doseCount?: number | null;
   schedule: ScheduleRule | null;
   version: number;
   createdBy: string;
@@ -118,6 +120,20 @@ export interface TreatmentView {
   updatedAt: string;
   /** Alteração feita sem conexão aguardando conferência (seção 10.2). */
   conflictId: string | null;
+}
+
+/** Andamento do tratamento: total e última previstos (nulos sem término). */
+export interface TreatmentProgressView {
+  treatmentId: string;
+  total: number | null;
+  administered: number;
+  notAdministered: number;
+  /** Horário já passou e ninguém registrou. */
+  unrecorded: number;
+  review: number;
+  upcoming: number | null;
+  firstAt: string | null;
+  lastAt: string | null;
 }
 
 /** Doses previstas antes de agora, ao ativar um tratamento que começou no passado. */

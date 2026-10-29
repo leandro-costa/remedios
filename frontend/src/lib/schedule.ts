@@ -138,3 +138,36 @@ export function slotsBetween(rule: ScheduleRule | null, anchor: Date, from: Date
   }
   return slots;
 }
+
+/** Plano de um tratamento com término: doses previstas, primeira e última, e dias corridos. */
+export interface CoursePlan {
+  count: number;
+  first: Date | null;
+  last: Date | null;
+  days: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Doses previstas a partir da primeira dose ({@code start}): até completar
+ * {@code doseCount}, ou até {@code endAt}. Mesmas regras do servidor. Null se
+ * a agenda for de outro fuso ou não houver término.
+ */
+export function planCourse(rule: ScheduleRule | null, start: Date, end: { doseCount?: number | null; endAt?: Date | null }): CoursePlan | null {
+  if (!end.doseCount && !end.endAt) return null;
+  const until = end.endAt ?? new Date(start.getTime() + 5 * 365 * DAY_MS);
+  const slots = slotsBetween(rule, start, start, until);
+  if (!slots) return null;
+  const taken = end.doseCount ? slots.slice(0, end.doseCount) : slots;
+  const first = taken[0] ?? null;
+  const last = taken[taken.length - 1] ?? null;
+  const days = first && last ? Math.max(1, Math.ceil((last.getTime() - first.getTime() + 1) / DAY_MS)) : 0;
+  return { count: taken.length, first, last, days };
+}
+
+/** "Por N dias" em número de doses: os horários da agenda em [início, início + N dias). */
+export function dosesInDays(rule: ScheduleRule | null, start: Date, days: number): number | null {
+  const slots = slotsBetween(rule, start, start, new Date(start.getTime() + days * DAY_MS));
+  return slots ? slots.length : null;
+}

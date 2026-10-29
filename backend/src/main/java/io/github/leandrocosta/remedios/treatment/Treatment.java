@@ -81,6 +81,10 @@ public class Treatment extends PanacheEntityBase {
     @Column(name = "end_at")
     public Instant endAt;
 
+    /** Término por número de doses (excludente com {@code endAt}); a primeira é a de {@code startAt}. */
+    @Column(name = "dose_count")
+    public Integer doseCount;
+
     /** Regra de agenda (ScheduleRule em JSON); obrigatória para ativar. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "schedule_rule")

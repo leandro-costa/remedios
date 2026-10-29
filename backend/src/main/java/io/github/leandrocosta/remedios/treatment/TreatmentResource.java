@@ -32,12 +32,12 @@ public class TreatmentResource {
     /** {@code conflictId}: alteração feita offline aguardando conferência (seção 10.2). */
     public record TreatmentView(UUID id, UUID personId, String name, Treatment.Kind kind, String prescribedDose,
             String route, String instructions, Treatment.Status status, Instant startAt, Instant endAt,
-            Map<String, Object> schedule, long version, UUID createdBy, Instant createdAt, UUID updatedBy,
+            Integer doseCount, Map<String, Object> schedule, long version, UUID createdBy, Instant createdAt, UUID updatedBy,
             Instant updatedAt, UUID conflictId) {
 
         static TreatmentView of(Treatment t, UUID conflictId) {
             return new TreatmentView(t.id, t.personId, t.name, t.kind, t.prescribedDose, t.route, t.instructions,
-                    t.status, t.startAt, t.endAt, t.scheduleRule, t.version, t.createdBy, t.createdAt, t.updatedBy,
+                    t.status, t.startAt, t.endAt, t.doseCount, t.scheduleRule, t.version, t.createdBy, t.createdAt, t.updatedBy,
                     t.updatedAt, conflictId);
         }
 
@@ -82,11 +82,13 @@ public class TreatmentResource {
             @Size(max = 4000) String instructions,
             @NotNull Instant startAt,
             Instant endAt,
-            ScheduleRule schedule) {
+            ScheduleRule schedule,
+            /** Término por número de doses (excludente com endAt). */
+            Integer doseCount) {
 
         TreatmentService.TreatmentData toData() {
             return new TreatmentService.TreatmentData(name, kind, prescribedDose, route, instructions, startAt,
-                    endAt, schedule);
+                    endAt, schedule, doseCount);
         }
     }
 
@@ -100,6 +102,7 @@ public class TreatmentResource {
             @NotNull Instant startAt,
             Instant endAt,
             ScheduleRule schedule,
+            Integer doseCount,
             @NotNull Long baseVersion,
             @NotNull Instant effectiveFrom,
             @Size(max = 1000) String reason,
@@ -120,11 +123,20 @@ public class TreatmentResource {
     }
 
     private final TreatmentService treatments;
+    private final TreatmentProgress progress;
     private final ObjectMapper json;
 
-    public TreatmentResource(TreatmentService treatments, ObjectMapper json) {
+    public TreatmentResource(TreatmentService treatments, TreatmentProgress progress, ObjectMapper json) {
         this.treatments = treatments;
+        this.progress = progress;
         this.json = json;
+    }
+
+    /** Andamento de cada tratamento (dadas, não dadas, sem registro, a dar, última prevista). */
+    @GET
+    @Path("/progress")
+    public List<TreatmentProgress.Progress> progress(@PathParam("familyId") UUID familyId) {
+        return progress.forFamily(familyId);
     }
 
     @GET
@@ -153,7 +165,7 @@ public class TreatmentResource {
             @HeaderParam(ClientOperations.HEADER) String operationKey, @Valid @NotNull UpdateTreatment r) {
         TreatmentService.Outcome outcome = treatments.update(familyId, treatmentId,
                 new TreatmentService.TreatmentData(r.name(), r.kind(), r.prescribedDose(), r.route(),
-                        r.instructions(), r.startAt(), r.endAt(), r.schedule()),
+                        r.instructions(), r.startAt(), r.endAt(), r.schedule(), r.doseCount()),
                 new TreatmentService.Change(r.baseVersion(), r.effectiveFrom(), r.reason()),
                 offline(r.preserveConflict(), r.deviceId(), operationKey, r));
         return respond(outcome);
