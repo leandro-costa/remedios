@@ -12,19 +12,20 @@ import { TREATMENT_STATUS } from "../lib/labels";
 import { describeSchedule } from "../lib/schedule";
 import { useFamily, useSession } from "../session";
 
+// Ativos primeiro e como padrão: encerrados e rascunhos ficam a um toque.
 const FILTERS: { value: TreatmentStatus | "ALL"; label: string }[] = [
-  { value: "ALL", label: "Todos" },
   { value: "ACTIVE", label: "Ativos" },
   { value: "DRAFT", label: "Rascunhos" },
   { value: "SUSPENDED", label: "Suspensos" },
   { value: "ENDED", label: "Encerrados" },
+  { value: "ALL", label: "Todos" },
 ];
 
 /** Lista de tratamentos por pessoa (seção 7.3). */
 export function TreatmentsPage() {
   const family = useFamily();
   const { me } = useSession();
-  const [filter, setFilter] = useState<TreatmentStatus | "ALL">("ALL");
+  const [filter, setFilter] = useState<TreatmentStatus | "ALL">("ACTIVE");
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
   const progress = useCached(`treatment-progress:${family.id}`, () =>
