@@ -35,5 +35,12 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
   await p.getByRole("link", { name: "Hoje" }).click();
   await expect(p.getByText("Nenhuma dose prevista para hoje.")).toBeVisible();
   await expect(p.getByRole("link", { name: new RegExp(T_PLUS_60) })).toHaveCount(0);
+
+  // Aba Tratamentos abre em "Ativos": o encerrado fica em "Encerrados".
+  await p.getByRole("link", { name: "Tratamentos" }).click();
+  await expect(p.getByRole("button", { name: "Ativos" })).toHaveClass(/chip-on/);
+  await expect(p.getByRole("link", { name: /Xarope E/ })).toHaveCount(0);
+  await p.getByRole("button", { name: "Encerrados" }).click();
+  await expect(p.getByRole("link", { name: /Xarope E/ })).toBeVisible();
   await ana.context.close();
 });
