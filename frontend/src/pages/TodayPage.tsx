@@ -36,14 +36,17 @@ export function TodayPage() {
   const queued = useMemo(() => new Map(outbox.filter((i) => i.occurrenceId).map((i) => [i.occurrenceId!, i])), [outbox]);
 
   const mine = new Set((persons.data ?? []).filter((p) => p.userId && p.userId === me?.id).map((p) => p.id));
+  // Doses canceladas (tratamento encerrado ou alterado) não pedem nenhuma ação:
+  // ficam no histórico e no tratamento, não no dia.
   const doses = (agenda.data ?? [])
+    .filter((o) => o.status !== "CANCELLED")
     .filter((o) => sameDay(new Date(o.scheduledAt), day))
     .filter((o) => !personId || o.person.id === personId);
   const review = (agenda.data ?? []).filter((o) => o.status === "REVIEW_REQUIRED").length;
   const treatmentReview = (treatmentConflicts.data ?? []).length;
   const isToday = sameDay(day, new Date());
   // Progresso do dia: doses dadas (inclui as registradas aqui e ainda não enviadas).
-  const counted = doses.filter((o) => o.status !== "CANCELLED");
+  const counted = doses;
   const given = counted.filter((o) => o.status === "ADMINISTERED"
     || (queued.get(o.id)?.state === "pending" && queued.get(o.id)?.kind === "ADMINISTER")).length;
   const open = (o: OccurrenceView) => (o.status === "PENDING" || o.status === "SCHEDULED") && !queued.has(o.id);
