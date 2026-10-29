@@ -27,6 +27,8 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
 
   // Encerra: as doses futuras são canceladas e saem do dia.
   await p.getByRole("link", { name: "Tratamentos" }).click();
+  // Espera a troca de tela: a tela Hoje também tem links com o nome do remédio.
+  await expect(p.getByRole("heading", { name: "Tratamentos" })).toBeVisible();
   await p.getByRole("link", { name: /Xarope E/ }).click();
   await p.getByRole("button", { name: "Encerrar" }).click();
   await p.getByRole("button", { name: "Confirmar" }).click();
@@ -38,6 +40,7 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
 
   // Aba Tratamentos abre em "Ativos": o encerrado fica em "Encerrados".
   await p.getByRole("link", { name: "Tratamentos" }).click();
+  await expect(p.getByRole("heading", { name: "Tratamentos" })).toBeVisible();
   await expect(p.getByRole("button", { name: "Ativos" })).toHaveClass(/chip-on/);
   await expect(p.getByRole("link", { name: /Xarope E/ })).toHaveCount(0);
   await p.getByRole("button", { name: "Encerrados" }).click();
