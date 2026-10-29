@@ -148,6 +148,7 @@ Criação (`schedule` é opcional no rascunho e obrigatória para ativar; `id`
   "instructions": "Conforme prescrição",
   "startAt": "2026-10-23T11:00:00Z",
   "endAt": null,
+  "doseCount": 10,
   "schedule": {
     "type": "DAILY",
     "timezone": "America/Sao_Paulo",
@@ -155,6 +156,17 @@ Criação (`schedule` é opcional no rascunho e obrigatória para ativar; `id`
   }
 }
 ```
+
+`startAt` é a **primeira dose** (data e hora). Término: `endAt` (data) **ou**
+`doseCount` (número de doses, 1 a 2000), nunca os dois (`422 END_OR_COUNT`).
+Com `doseCount`, a agenda gera doses a partir da primeira até completar o
+total: canceladas não contam; dose não dada conta e não é reposta.
+
+`GET /api/families/{f}/treatments/progress`: andamento de cada tratamento,
+`{treatmentId, total, administered, notAdministered, unrecorded, review,
+upcoming, firstAt, lastAt}`. `total`, `upcoming` e `lastAt` são nulos quando
+o tratamento não tem término; `unrecorded` são doses cujo horário passou sem
+registro.
 
 Ciclo de vida: `DRAFT → ACTIVE | ENDED`, `ACTIVE ↔ SUSPENDED`,
 `ACTIVE | SUSPENDED → ENDED`. `ENDED` é final.

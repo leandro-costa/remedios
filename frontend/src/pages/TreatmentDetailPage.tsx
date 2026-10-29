@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
-import type { PastDoses, RevisionView, TreatmentStatus, TreatmentView } from "../api/types";
+import type { PastDoses, RevisionView, TreatmentProgressView, TreatmentStatus, TreatmentView } from "../api/types";
 import { Icon } from "../components/Icon";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
@@ -47,6 +47,8 @@ export function TreatmentDetailPage() {
   const family = useFamily();
   const navigate = useNavigate();
   const treatment = useCached(`treatment:${id}`, () => api<TreatmentView>(`/families/${family.id}/treatments/${id}`));
+  const progressList = useCached(`treatment-progress:${family.id}`, () =>
+    api<TreatmentProgressView[]>(`/families/${family.id}/treatments/progress`));
   const revisions = useCached(`revisions:${id}`, () => api<RevisionView[]>(`/families/${family.id}/treatments/${id}/revisions`));
   const { deviceId } = useSession();
   const [pending, setPending] = useState<Action | null>(null);
@@ -55,6 +57,7 @@ export function TreatmentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const t = treatment.data;
+  const progress = progressList.data?.find((p) => p.treatmentId === t?.id && !isPending(t));
   if (!t) return treatment.loading ? <Spinner /> : <div className="page"><Notice tone="error">{treatment.error}</Notice></div>;
 
   // Rascunho que começa no passado: as doses anteriores a agora.
@@ -115,9 +118,13 @@ export function TreatmentDetailPage() {
         {t.instructions && (<><dt>Instruções</dt><dd className="pre">{t.instructions}</dd></>)}
         <dt>Agenda</dt><dd>{describeSchedule(t.schedule)}</dd>
         <dt>Tipo</dt><dd>{TREATMENT_KIND[t.kind]}</dd>
-        <dt>Período</dt><dd>{formatDate(t.startAt)} {t.endAt ? `até ${formatDate(t.endAt)}` : "· sem término"}</dd>
+        <dt>Primeira dose</dt><dd>{formatWhen(t.startAt)}</dd>
+        <dt>Término</dt>
+        <dd>{t.doseCount ? `Após ${t.doseCount} ${t.doseCount === 1 ? "dose" : "doses"}` : t.endAt ? formatWhen(t.endAt) : "Sem término"}</dd>
         <dt>Versão</dt><dd>{t.version}</dd>
       </dl>
+
+      {progress && <Progress p={progress} />}
 
       {!t.conflictId && t.status !== "ENDED" && (
         <div className="row wrap">
@@ -154,7 +161,9 @@ export function TreatmentDetailPage() {
               </label>
               <label className="radio">
                 <input type="radio" name="past" checked={past === "SKIP"} onChange={() => setPast("SKIP")} />
-                Ignorar as anteriores: a agenda começa agora
+                {t.doseCount
+                  ? `A primeira dose ainda não foi dada: as ${t.doseCount} doses contam a partir de agora`
+                  : "Ignorar as anteriores: a agenda começa agora"}
               </label>
             </fieldset>
           )}
@@ -183,5 +192,29 @@ export function TreatmentDetailPage() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Andamento: dadas, não dadas, sem registro e a dar. Só conta; dose perdida não é reposta. */
+function Progress({ p }: { p: TreatmentProgressView }) {
+  const recorded = p.administered + p.notAdministered;
+  return (
+    <section className="card stack" aria-label="Andamento do tratamento">
+      <div className="title-row">
+        <h2>Andamento</h2>
+        {p.total !== null && <span className="muted small">{recorded} de {p.total} registradas</span>}
+      </div>
+      <dl className="tally">
+        <div><dt>Dadas</dt><dd>{p.administered}</dd></div>
+        <div><dt>Não dadas</dt><dd>{p.notAdministered}</dd></div>
+        <div><dt>Sem registro</dt><dd>{p.unrecorded}</dd></div>
+        <div><dt>A dar</dt><dd>{p.upcoming ?? "—"}</dd></div>
+      </dl>
+      {p.review > 0 && <p className="small">{p.review} para conferir.</p>}
+      {p.lastAt && <p className="muted small">Última dose prevista: {formatWhen(p.lastAt)}</p>}
+      {p.notAdministered + p.unrecorded > 0 && (
+        <p className="muted small">Doses não dadas não são repostas pelo app. Em caso de dúvida, fale com quem prescreveu.</p>
+      )}
+    </section>
   );
 }

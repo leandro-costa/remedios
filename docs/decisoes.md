@@ -286,3 +286,24 @@ ou dose. As preferências pessoais começam com `lock_screen_details = false`
   fila. Se chegar ao servidor depois da hora escolhida, ou com a dose já
   decidida, não há o que adiar e nada muda.
 - **Limite de 12 horas** por adiamento.
+
+## Término por número de doses
+
+- **A receita fala em doses** ("por 5 dias, 2 vezes ao dia" = 10). O término
+  pode ser **sem término**, **até uma data**, **por N dias** ou **por N doses**.
+  "Por N dias" vira número de doses pela agenda (os horários em
+  [primeira dose, primeira dose + N dias)), feito no aparelho e mostrado na
+  conferência; o tratamento guarda só `dose_count` (V9).
+- **O início é a primeira dose de fato.** Começou às 20h: a dose das 8h daquele
+  dia nunca existiu, e as 10 doses terminam no 6º dia às 8h. Tratamento já em
+  andamento: as doses que já passaram entram na pergunta da ativação ("foram
+  dadas?") e contam no total. "A primeira ainda não foi dada" desloca o
+  tratamento inteiro, mantendo o total.
+- **Dose não dada conta e não é reposta.** O app mostra o andamento (dadas, não
+  dadas, sem registro, a dar) e a última dose prevista, mas não estende o
+  tratamento sozinho: seria compensação de atraso (seção 6.2, item 12).
+- **Alteração no meio mantém o total:** as doses canceladas pela alteração não
+  contam, e a nova agenda gera as que faltam.
+- **Conferência sempre mostra o plano:** "10 doses · 5 dias · primeira … ·
+  última …", também no término por data (onde fica visível quando as datas
+  cortam uma dose).
