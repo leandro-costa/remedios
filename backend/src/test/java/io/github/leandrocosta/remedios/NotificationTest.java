@@ -308,6 +308,11 @@ class NotificationTest {
     void testNotificationAndUnsubscribe() throws Exception {
         d.ana.req().post("/api/me/push/test").then().statusCode(200).body("sent", equalTo(1));
         assertEquals("Notificações ativadas", anaPhone.take().getFirst().get("title"));
+        // Só para este aparelho: outro aparelho da mesma pessoa não conta como entregue.
+        d.ana.req().queryParam("deviceId", d.anaDevice).post("/api/me/push/test").then().statusCode(200).body("sent", equalTo(1));
+        assertEquals(1, anaPhone.take().size());
+        d.ana.req().queryParam("deviceId", UUID.randomUUID()).post("/api/me/push/test").then().statusCode(422)
+                .body("code", equalTo("NO_SUBSCRIPTION"));
         d.ana.req().delete("/api/me/devices/{d}/push", d.anaDevice).then().statusCode(204);
         d.ana.req().post("/api/me/push/test").then().statusCode(422).body("code", equalTo("NO_SUBSCRIPTION"));
     }

@@ -13,7 +13,7 @@ import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { ROLE } from "../lib/labels";
 import { addDays, formatDate, formatTime, formatWhen, sameDay, startOfDay } from "../lib/time";
-import { disablePush, enablePush, pushState, testPush, type PushState } from "../sync/push";
+import { disablePush, enablePush, pushState, testPush, type PushState, type TestOutcome } from "../sync/push";
 import { isPending } from "../db/cache";
 import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
@@ -408,6 +408,15 @@ function Preferences() {
   );
 }
 
+const TEST_MESSAGES: Record<TestOutcome, string> = {
+  arrived: "O aviso de teste chegou a este aparelho. Se ele não apareceu na tela, o sistema está escondendo as " +
+    "notificações do navegador: confira o modo Não perturbe e as notificações do navegador nas configurações do " +
+    "aparelho (no Windows: Configurações › Sistema › Notificações; no Android: Configurações › Apps › Chrome › Notificações).",
+  sent: "O servidor enviou o aviso, mas ele ainda não chegou a este aparelho. Pode demorar alguns minutos; se não " +
+    "chegar, desative e ative as notificações de novo.",
+  failed: "O serviço de notificações recusou o aviso para este aparelho. Desative e ative as notificações de novo.",
+};
+
 /** Ativação das notificações neste aparelho (Web Push). */
 function PushSettings() {
   const { deviceId } = useSession();
@@ -430,7 +439,7 @@ function PushSettings() {
       <h2>Notificações neste aparelho</h2>
       {state && <p className={state === "on" ? "" : "muted"}>{descriptions[state]}</p>}
       {error && <Notice tone="error">{error}</Notice>}
-      {message && <Notice tone="ok">{message}</Notice>}
+      {message && <Notice tone={message === TEST_MESSAGES.arrived ? "ok" : "warn"}>{message}</Notice>}
       <div className="row wrap">
         {state === "off" && deviceId && (
           <button className="btn btn-primary" disabled={busy || !online} onClick={() => void run(async () => setState(await enablePush(deviceId)))}>
@@ -440,9 +449,9 @@ function PushSettings() {
         {state === "on" && deviceId && (
           <>
             <button className="btn" disabled={busy || !online} onClick={() => void run(async () => {
-              const r = await testPush();
-              setMessage(r.sent > 0 ? "Aviso de teste enviado." : "Não foi possível entregar o aviso de teste.");
-            })}>Enviar aviso de teste</button>
+              setMessage(null);
+              setMessage(TEST_MESSAGES[await testPush(deviceId)]);
+            })}>{busy ? "Enviando…" : "Enviar aviso de teste"}</button>
             <button className="btn" disabled={busy || !online} onClick={() => void run(async () => {
               await disablePush(deviceId);
               setState("off");

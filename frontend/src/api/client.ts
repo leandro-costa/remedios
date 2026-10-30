@@ -73,7 +73,10 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   return data as T;
 }
 
+/** Erro com mensagem já pronta para a pessoa (ex.: recusa do navegador). */
+export class UserError extends Error {}
+
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError || error instanceof OfflineError) return error.message;
+  if (error instanceof ApiError || error instanceof OfflineError || error instanceof UserError) return error.message;
   return "Algo deu errado. Tente novamente.";
 }

@@ -329,7 +329,7 @@ administração. `OPEN` devolve a dose ao estado em aberto.
 | GET | `/api/push/config` | `{enabled, publicKey}`: chave VAPID para o navegador se inscrever |
 | PUT | `/api/me/devices/{d}/push` | `{endpoint, p256dh, auth, timezone}`: inscrição deste aparelho (HTTPS); substitui a anterior |
 | DELETE | `/api/me/devices/{d}/push` | desativa as notificações do aparelho |
-| POST | `/api/me/push/test` | envia um aviso de teste: `{sent, failed}` |
+| POST | `/api/me/push/test?deviceId=` | envia um aviso de teste a todos os aparelhos do usuário, ou só a `deviceId`: `{sent, failed}` |
 | POST | `/api/families/{f}/occurrences/{o}/claim` | "estou cuidando desta dose" (20 min); `409 ALREADY_CLAIMED` se outra pessoa já está |
 | DELETE | `/api/families/{f}/occurrences/{o}/claim` | libera |
 | PUT | `/api/families/{f}/occurrences/{o}/snooze` | "lembrar daqui a pouco": `{remindAt}` (até 12 h; `422 SNOOZE_TOO_LONG`). Adia só os lembretes de quem pede; o horário da dose não muda. Com a dose já decidida ou a hora já passada (envio tardio da fila), nada muda |

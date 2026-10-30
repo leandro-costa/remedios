@@ -41,7 +41,12 @@ self.addEventListener("push", (event) => {
     data: { url: data.url ?? "/" },
   };
   if (!data.silent && data.vibrate?.length) options.vibrate = data.vibrate;
-  event.waitUntil(self.registration.showNotification(data.title ?? "Remédios", options));
+  event.waitUntil((async () => {
+    await self.registration.showNotification(data.title ?? "Remédios", options);
+    // Avisa a tela aberta que o aviso chegou (o teste de notificações usa isso
+    // para separar "não chegou" de "chegou, mas o sistema não mostrou").
+    for (const client of await self.clients.matchAll({ type: "window" })) client.postMessage({ type: "push-received", tag: data.tag });
+  })());
 });
 
 // Tocar no aviso abre a dose; nunca registra nada sozinho (seção 6.2.11).
