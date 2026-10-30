@@ -34,7 +34,8 @@ public class DoseOccurrence extends PanacheEntityBase {
     @Column(name = "treatment_id", nullable = false)
     public UUID treatmentId;
 
-    @Column(name = "schedule_id", nullable = false)
+    /** Nulo nas doses "se necessário", que não pertencem a uma agenda. */
+    @Column(name = "schedule_id")
     public UUID scheduleId;
 
     @Column(name = "slot_key", nullable = false)
@@ -43,8 +44,8 @@ public class DoseOccurrence extends PanacheEntityBase {
     @Column(name = "scheduled_at", nullable = false)
     public Instant scheduledAt;
 
-    @Column(name = "schedule_version", nullable = false)
-    public long scheduleVersion;
+    @Column(name = "schedule_version")
+    public Long scheduleVersion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

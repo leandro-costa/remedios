@@ -270,6 +270,12 @@ public class TreatmentService {
         }
         validate(data);
         requireEffectiveFrom(t, change);
+        if (t.status != Treatment.Status.DRAFT
+                && (t.kind == Treatment.Kind.AS_NEEDED) != (data.kind() == Treatment.Kind.AS_NEEDED)) {
+            throw ApiException.unprocessable("KIND_CHANGE",
+                    "Um tratamento já ativado não pode mudar entre \"se necessário\" e com horários. "
+                            + "Encerre este e cadastre outro.");
+        }
 
         Map<String, Object> before = snapshot(t);
         apply(t, data);
@@ -277,7 +283,7 @@ public class TreatmentService {
         if (sameContent(before, after)) {
             return t;
         }
-        if (t.status == Treatment.Status.ACTIVE) {
+        if (t.status == Treatment.Status.ACTIVE && t.kind != Treatment.Kind.AS_NEEDED) {
             if (t.scheduleRule == null) {
                 throw scheduleRequired();
             }
@@ -299,10 +305,12 @@ public class TreatmentService {
                     "Não é possível passar de " + t.status + " para " + target + ".");
         }
         requireEffectiveFrom(t, change);
-        if (target == Treatment.Status.ACTIVE && t.scheduleRule == null) {
+        boolean asNeeded = t.kind == Treatment.Kind.AS_NEEDED;
+        if (target == Treatment.Status.ACTIVE && t.scheduleRule == null && !asNeeded) {
             throw scheduleRequired();
         }
-        boolean recordPast = pastDoses == PastDoses.ADMINISTERED && t.status == Treatment.Status.DRAFT
+        // "Se necessário" não tem agenda: nada a gerar nem a cancelar.
+        boolean recordPast = !asNeeded && pastDoses == PastDoses.ADMINISTERED && t.status == Treatment.Status.DRAFT
                 && target == Treatment.Status.ACTIVE;
         if (recordPast) {
             devices.requireActive(deviceId);
@@ -310,7 +318,9 @@ public class TreatmentService {
         Map<String, Object> before = snapshot(t);
         Treatment.Status previous = t.status;
         t.status = target;
-        if (target == Treatment.Status.ACTIVE) {
+        if (asNeeded) {
+            // sem agenda
+        } else if (target == Treatment.Status.ACTIVE) {
             schedules.start(t, change.effectiveFrom());
         } else if (previous == Treatment.Status.ACTIVE) {
             stopSchedule(t, change, target == Treatment.Status.SUSPENDED ? "Tratamento suspenso"
@@ -485,6 +495,10 @@ public class TreatmentService {
     }
 
     private static void validate(TreatmentData data) {
+        if (data.kind() == Treatment.Kind.AS_NEEDED && (data.schedule() != null || data.doseCount() != null)) {
+            throw ApiException.unprocessable("AS_NEEDED_WITHOUT_SCHEDULE",
+                    "Uso \"se necessário\" não tem horários nem número de doses.");
+        }
         if (data.endAt() != null && !data.endAt().isAfter(data.startAt())) {
             throw ApiException.unprocessable("INVALID_PERIOD", "O término deve ser posterior ao início.");
         }

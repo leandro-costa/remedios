@@ -64,12 +64,12 @@ export function TreatmentsPage() {
                   <span className="item-main">
                     <strong className="item-title">{t.name}</strong>
                     <span className="muted small">
-                      {t.prescribedDose} · {describeSchedule(t.schedule)}
+                      {t.prescribedDose} · {t.kind === "AS_NEEDED" ? "se necessário" : describeSchedule(t.schedule)}
                       {t.doseCount ? ` · ${t.doseCount} ${t.doseCount === 1 ? "dose" : "doses"}` : ""}
                     </span>
                     {(() => {
                       const p = progressOf(t.id);
-                      if (!p || p.total === null || t.status === "DRAFT") return null;
+                      if (!p || p.total === null || t.status === "DRAFT" || t.kind === "AS_NEEDED") return null;
                       return <span className="small">{p.administered} de {p.total} dadas{p.notAdministered ? ` · ${p.notAdministered} não dadas` : ""}</span>;
                     })()}
                     <span className="row wrap">

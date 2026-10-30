@@ -19,6 +19,7 @@ export const TREATMENT_STATUS: Record<TreatmentStatus, string> = {
 export const TREATMENT_KIND: Record<TreatmentKind, string> = {
   CONTINUOUS: "Contínuo",
   OCCASIONAL: "Ocasional (por período)",
+  AS_NEEDED: "Se necessário (sem horários)",
 };
 
 export const ROLE: Record<Role, string> = {

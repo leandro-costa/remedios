@@ -2,6 +2,8 @@ package io.github.leandrocosta.remedios.treatment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.leandrocosta.remedios.common.ApiException;
+import io.github.leandrocosta.remedios.occurrence.OccurrenceService;
+import io.github.leandrocosta.remedios.occurrence.OccurrenceViews;
 import io.github.leandrocosta.remedios.schedule.ScheduleRule;
 import io.github.leandrocosta.remedios.sync.ClientOperations;
 import io.github.leandrocosta.remedios.sync.SyncConflict;
@@ -122,12 +124,22 @@ public class TreatmentResource {
             Boolean preserveConflict) {
     }
 
+    /** Dose "se necessário": {@code id} gerado no aparelho; {@code recordedAt}, quando o responsável tocou. */
+    public record AsNeededDose(UUID id, @NotNull UUID deviceId, Instant administeredAt, @Size(max = 1000) String notes,
+            Instant recordedAt) {
+    }
+
     private final TreatmentService treatments;
     private final TreatmentProgress progress;
+    private final OccurrenceService occurrences;
+    private final OccurrenceViews occurrenceViews;
     private final ObjectMapper json;
 
-    public TreatmentResource(TreatmentService treatments, TreatmentProgress progress, ObjectMapper json) {
+    public TreatmentResource(TreatmentService treatments, TreatmentProgress progress, OccurrenceService occurrences,
+            OccurrenceViews occurrenceViews, ObjectMapper json) {
         this.treatments = treatments;
+        this.occurrences = occurrences;
+        this.occurrenceViews = occurrenceViews;
         this.progress = progress;
         this.json = json;
     }
@@ -151,6 +163,15 @@ public class TreatmentResource {
     public Response create(@PathParam("familyId") UUID familyId, @Valid @NotNull CreateTreatment request) {
         Treatment t = treatments.create(familyId, request.id(), request.personId(), request.toData());
         return Response.status(Response.Status.CREATED).entity(TreatmentView.of(t)).build();
+    }
+
+    /** Registra uma dose de um tratamento "se necessário" (dada agora ou há pouco). */
+    @POST
+    @Path("/{treatmentId}/doses")
+    public OccurrenceViews.OccurrenceView recordDose(@PathParam("familyId") UUID familyId,
+            @PathParam("treatmentId") UUID treatmentId, @Valid @NotNull AsNeededDose r) {
+        return occurrenceViews.of(List.of(occurrences.recordAsNeeded(familyId, treatmentId, r.id(), r.deviceId(),
+                r.administeredAt(), r.notes(), r.recordedAt()))).getFirst();
     }
 
     @GET

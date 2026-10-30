@@ -34,7 +34,7 @@ public class OccurrenceViews {
     public record PersonRef(UUID id, String displayName) {
     }
 
-    public record TreatmentRef(UUID id, String name, String prescribedDose, String route) {
+    public record TreatmentRef(UUID id, String name, String prescribedDose, String route, Treatment.Kind kind) {
     }
 
     public record UserRef(UUID id, String displayName) {
@@ -83,7 +83,8 @@ public class OccurrenceViews {
         Map<UUID, Person> persons = byId(Person.class,
                 treatments.values().stream().map(t -> t.personId).collect(Collectors.toSet()), p -> p.id);
         Map<UUID, TreatmentSchedule> schedules = byId(TreatmentSchedule.class,
-                occurrences.stream().map(o -> o.scheduleId).collect(Collectors.toSet()), s -> s.id);
+                occurrences.stream().map(o -> o.scheduleId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()),
+                s -> s.id);
         Map<UUID, AdministrationRecord> records = AdministrationRecord
                 .listValid(occurrences.stream().map(o -> o.id).toList()).stream()
                 .collect(Collectors.toMap(r -> r.doseOccurrenceId, Function.identity()));
@@ -96,15 +97,16 @@ public class OccurrenceViews {
         return occurrences.stream().map(o -> {
             Treatment t = treatments.get(o.treatmentId);
             Person p = persons.get(t.personId);
-            TreatmentSchedule s = schedules.get(o.scheduleId);
+            TreatmentSchedule s = o.scheduleId == null ? null : schedules.get(o.scheduleId);
             boolean open = o.isOpen();
             DoseOccurrence.Status status = open && !now.isBefore(o.scheduledAt) ? DoseOccurrence.Status.PENDING
                     : o.status;
-            boolean late = open && now.isAfter(o.scheduledAt.plus(Duration.ofMinutes(s.lateToleranceMinutes)));
+            boolean late = open && s != null
+                    && now.isAfter(o.scheduledAt.plus(Duration.ofMinutes(s.lateToleranceMinutes)));
             AdministrationRecord r = records.get(o.id);
             return new OccurrenceView(o.id, o.scheduledAt, status, late, o.version,
                     new PersonRef(p.id, p.displayName),
-                    new TreatmentRef(t.id, t.name, t.prescribedDose, t.route),
+                    new TreatmentRef(t.id, t.name, t.prescribedDose, t.route, t.kind),
                     r == null ? null : administration(r, users),
                     o.statusReason, ref(o.statusChangedBy, users), o.statusChangedAt,
                     claimActive(o, now) ? ref(o.claimedBy, users) : null, claimActive(o, now) ? o.claimedUntil : null,
