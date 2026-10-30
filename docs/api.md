@@ -168,6 +168,24 @@ upcoming, firstAt, lastAt}`. `total`, `upcoming` e `lastAt` são nulos quando
 o tratamento não tem término; `unrecorded` são doses cujo horário passou sem
 registro.
 
+**Se necessário** (`kind: "AS_NEEDED"`): sem `schedule` e sem `doseCount`
+(`422 AS_NEEDED_WITHOUT_SCHEDULE`); `endAt` é opcional. Ativar não gera doses.
+Cada dose é registrada quando é dada:
+
+`POST /api/families/{f}/treatments/{t}/doses` com
+`{id?, deviceId, administeredAt?, notes?, recordedAt?}` cria uma dose já
+administrada (`scheduledAt` = horário da administração) e devolve a dose.
+`id` vem do aparelho (`409 ID_IN_USE` se repetido; reenvios usam
+`Idempotency-Key`). Recusas: `422 NOT_AS_NEEDED` (tratamento com horários),
+`409 TREATMENT_NOT_ACTIVE` (rascunho), `422 ADMINISTERED_AT_IN_FUTURE`. Uma
+dose dada é aceita mesmo com o tratamento suspenso ou encerrado depois (envio
+atrasado de um aparelho offline). A correção aceita `status: "ADMINISTERED"`
+(novo horário) ou `"CANCELLED"` (registrada por engano); `OPEN` e
+`NOT_ADMINISTERED` não valem para essas doses (`422 AS_NEEDED_CORRECTION`).
+Os outros responsáveis recebem um aviso a cada dose, com quantas foram dadas
+nas últimas 24 h (salvo política de confirmação `NONE`). Um tratamento ativado
+não muda entre "se necessário" e com horários (`422 KIND_CHANGE`).
+
 Ciclo de vida: `DRAFT → ACTIVE | ENDED`, `ACTIVE ↔ SUSPENDED`,
 `ACTIVE | SUSPENDED → ENDED`. `ENDED` é final.
 
@@ -255,7 +273,7 @@ Efeitos na agenda:
 | POST | `/api/families/{f}/occurrences/{o}/not-administered` | `{reason?, deviceId?, operationId?, baseVersion?, recordedAt?}` |
 | POST | `/api/families/{f}/occurrences/{o}/resolution` | conferência de conflito: `{baseVersion, status, reason, proposalId?, administeredAt?, deviceId?}` |
 | GET | `/api/families/{f}/conflicts` | doses aguardando conferência, com as propostas |
-| POST | `/api/families/{f}/occurrences/{o}/correction` | `{baseVersion, status, reason, administeredAt?, notes?, deviceId?}` |
+| POST | `/api/families/{f}/occurrences/{o}/correction` | `{baseVersion, status, reason, administeredAt?, notes?, deviceId?}`; `status`: `ADMINISTERED`, `NOT_ADMINISTERED`, `OPEN` ou, só para "se necessário", `CANCELLED` |
 | GET | `/api/families/{f}/history?from=&to=&personId=&treatmentId=&recordedBy=&limit=` | doses com desfecho (administrada ou não), mais recentes primeiro |
 
 Cada dose traz:

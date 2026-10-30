@@ -97,7 +97,8 @@ export interface ScheduleRule {
 }
 
 export type TreatmentStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "ENDED";
-export type TreatmentKind = "CONTINUOUS" | "OCCASIONAL";
+/** {@code AS_NEEDED}: "se necessário", sem horários; cada dose é registrada quando é dada. */
+export type TreatmentKind = "CONTINUOUS" | "OCCASIONAL" | "AS_NEEDED";
 
 export interface TreatmentView {
   id: string;
@@ -201,7 +202,7 @@ export interface OccurrenceView {
   late: boolean;
   version: number;
   person: { id: string; displayName: string };
-  treatment: { id: string; name: string; prescribedDose: string; route: string | null };
+  treatment: { id: string; name: string; prescribedDose: string; route: string | null; kind?: TreatmentKind };
   administration: AdministrationView | null;
   statusReason: string | null;
   statusChangedBy: UserRef | null;

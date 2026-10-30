@@ -91,9 +91,13 @@ export function TreatmentFormPage() {
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   if (editing && !current && !error) return <Spinner />;
 
+  const asNeeded = form.kind === "AS_NEEDED";
+  // Ativado, não pode trocar entre "se necessário" e com horários (encerre e cadastre outro).
+  const kindLocked = Boolean(current && current.status !== "DRAFT");
+
   function review(e: FormEvent) {
     e.preventDefault();
-    const problem = validateScheduleForm(form.schedule);
+    const problem = asNeeded ? null : validateScheduleForm(form.schedule);
     if (problem) return setError(problem);
     if (form.endMode === "DATE" && !form.endAt) return setError("Informe a data de término.");
     if (form.endMode === "DATE" && new Date(form.endAt) <= new Date(form.startAt)) return setError("O término deve ser depois do início.");
@@ -125,8 +129,8 @@ export function TreatmentFormPage() {
       route: form.route.trim() || null, instructions: form.instructions.trim() || null,
       startAt: fromLocalInput(form.startAt),
       endAt: form.endMode === "DATE" && form.endAt ? fromLocalInput(form.endAt) : null,
-      doseCount: form.endMode === "DAYS" || form.endMode === "DOSES" ? doseCount() : null,
-      schedule: ruleFromForm(form.schedule),
+      doseCount: !asNeeded && (form.endMode === "DAYS" || form.endMode === "DOSES") ? doseCount() : null,
+      schedule: asNeeded ? null : ruleFromForm(form.schedule),
     };
     try {
       if (current) {
@@ -175,7 +179,7 @@ export function TreatmentFormPage() {
 
   const person = persons.data?.find((p) => p.id === form.personId);
   const count = form.endMode === "DAYS" || form.endMode === "DOSES" ? doseCount() : null;
-  const plan = reviewing ? planCourse(ruleFromForm(form.schedule), new Date(form.startAt), {
+  const plan = reviewing && !asNeeded ? planCourse(ruleFromForm(form.schedule), new Date(form.startAt), {
     doseCount: count, endAt: form.endMode === "DATE" && form.endAt ? new Date(form.endAt) : null,
   }) : null;
   const describeEnd = () => {
@@ -192,7 +196,7 @@ export function TreatmentFormPage() {
   const now = new Date();
   const oldStart = current ? new Date(current.startAt) : null;
   const newStart = new Date(form.startAt);
-  const startMoved = current?.status === "ACTIVE" && oldStart !== null && oldStart.getTime() !== newStart.getTime();
+  const startMoved = !asNeeded && current?.status === "ACTIVE" && oldStart !== null && oldStart.getTime() !== newStart.getTime();
   const startLater = startMoved && newStart > oldStart!;
   const startEarlier = startMoved && newStart < oldStart!;
   const gapFrom = new Date(Math.max(newStart.getTime(), now.getTime() - 30 * 86_400_000 + 5 * 60_000));
@@ -211,8 +215,8 @@ export function TreatmentFormPage() {
           {form.route && (<><dt>Via</dt><dd>{form.route}</dd></>)}
           {form.instructions && (<><dt>Instruções</dt><dd>{form.instructions}</dd></>)}
           <dt>Tipo</dt><dd>{TREATMENT_KIND[form.kind]}</dd>
-          <dt>Agenda</dt><dd>{describeSchedule(ruleFromForm(form.schedule))}</dd>
-          <dt>Primeira dose</dt><dd>{formatWhen(fromLocalInput(form.startAt))}</dd>
+          <dt>Agenda</dt><dd>{asNeeded ? "Sem horários: registre cada dose quando der" : describeSchedule(ruleFromForm(form.schedule))}</dd>
+          <dt>{asNeeded ? "Início" : "Primeira dose"}</dt><dd>{formatWhen(fromLocalInput(form.startAt))}</dd>
           <dt>Término</dt><dd>{describeEnd()}</dd>
           {plan && plan.count > 0 && (
             <>
@@ -251,7 +255,7 @@ export function TreatmentFormPage() {
             </label>
           </fieldset>
         )}
-        {current?.status === "ACTIVE" && (
+        {current?.status === "ACTIVE" && !asNeeded && (
           <Notice>Se a agenda, o início ou o término mudaram, as doses futuras ainda não registradas serão recalculadas. Doses passadas e registros não mudam.</Notice>
         )}
         <div className="row">
@@ -302,26 +306,34 @@ export function TreatmentFormPage() {
         <input value={form.route} onChange={(e) => set({ route: e.target.value })} maxLength={200} placeholder="Ex.: oral" />
       </label>
       <label>
-        Instruções <span className="muted small">(opcional)</span>
-        <textarea value={form.instructions} onChange={(e) => set({ instructions: e.target.value })} maxLength={4000} rows={3} />
-      </label>
-      <label>
-        Tipo
-        <select value={form.kind} onChange={(e) => set({ kind: e.target.value as TreatmentKind })}>
-          <option value="CONTINUOUS">{TREATMENT_KIND.CONTINUOUS}</option>
-          <option value="OCCASIONAL">{TREATMENT_KIND.OCCASIONAL}</option>
+        Tipo de tratamento
+        <select value={form.kind} onChange={(e) => {
+          const kind = e.target.value as TreatmentKind;
+          // "Se necessário" não tem término por dias ou doses.
+          set({ kind, endMode: kind === "AS_NEEDED" && (form.endMode === "DAYS" || form.endMode === "DOSES") ? "NONE" : form.endMode });
+        }}>
+          {(!kindLocked || !asNeeded) && <option value="CONTINUOUS">{TREATMENT_KIND.CONTINUOUS}</option>}
+          {(!kindLocked || !asNeeded) && <option value="OCCASIONAL">{TREATMENT_KIND.OCCASIONAL}</option>}
+          {(!kindLocked || asNeeded) && <option value="AS_NEEDED">{TREATMENT_KIND.AS_NEEDED}</option>}
         </select>
+        {asNeeded && <span className="muted small">Para remédios dados só quando precisa (ex.: paracetamol se febre). Sem lembretes: registre cada dose quando der.</span>}
       </label>
-      <ScheduleEditor value={form.schedule} onChange={(schedule) => set({ schedule })} />
       <label>
-        Primeira dose (data e hora)
+        {asNeeded ? "Quando dar (como na receita)" : "Instruções"} <span className="muted small">(opcional)</span>
+        <textarea value={form.instructions} onChange={(e) => set({ instructions: e.target.value })} maxLength={4000} rows={3}
+          placeholder={asNeeded ? "Ex.: se febre acima de 37,8 °C, no máximo de 6 em 6 horas" : undefined} />
+        {asNeeded && <span className="muted small">Aparece ao lado da última dose. O app não calcula quando a próxima pode ser dada.</span>}
+      </label>
+      {!asNeeded && <ScheduleEditor value={form.schedule} onChange={(schedule) => set({ schedule })} />}
+      <label>
+        {asNeeded ? "Início (data e hora)" : "Primeira dose (data e hora)"}
         <input type="datetime-local" value={form.startAt} onChange={(e) => set({ startAt: e.target.value })} required />
-        <span className="muted small">Já em andamento? Informe a primeira dose de fato: as anteriores a agora contam no total.</span>
+        {!asNeeded && <span className="muted small">Já em andamento? Informe a primeira dose de fato: as anteriores a agora contam no total.</span>}
       </label>
       <fieldset className="stack">
         <legend>Término</legend>
         <div className="chips" role="radiogroup" aria-label="Término">
-          {END_MODES.map((m) => (
+          {END_MODES.filter((m) => !asNeeded || m.value === "NONE" || m.value === "DATE").map((m) => (
             <button key={m.value} type="button" role="radio" aria-checked={form.endMode === m.value}
               className={`chip ${form.endMode === m.value ? "chip-on" : ""}`} onClick={() => set({ endMode: m.value })}>
               {m.label}

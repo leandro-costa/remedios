@@ -25,7 +25,8 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "treatment")
 public class Treatment extends PanacheEntityBase {
 
-    public enum Kind { CONTINUOUS, OCCASIONAL }
+    /** {@code AS_NEEDED}: "se necessário", sem agenda; cada dose é registrada quando é dada. */
+    public enum Kind { CONTINUOUS, OCCASIONAL, AS_NEEDED }
 
     public enum Status {
         /** Cadastrado, aguardando conferência antes de ativar a agenda (seção 4.1, passo 6). */

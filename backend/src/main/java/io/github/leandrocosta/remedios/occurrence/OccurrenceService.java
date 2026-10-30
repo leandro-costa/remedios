@@ -2,6 +2,7 @@ package io.github.leandrocosta.remedios.occurrence;
 
 import io.github.leandrocosta.remedios.audit.AuditService;
 import io.github.leandrocosta.remedios.common.ApiException;
+import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
@@ -39,7 +40,8 @@ public class OccurrenceService {
     private static final Duration MAX_RANGE = Duration.ofDays(62);
     static final int MAX_HISTORY = 500;
 
-    public enum CorrectionTarget { ADMINISTERED, NOT_ADMINISTERED, OPEN }
+    /** {@code CANCELLED}: dose "se necessário" registrada por engano. */
+    public enum CorrectionTarget { ADMINISTERED, NOT_ADMINISTERED, OPEN, CANCELLED }
 
     public record Correction(long baseVersion, CorrectionTarget status, Instant administeredAt, String notes,
             String reason, UUID deviceId) {
@@ -129,6 +131,53 @@ public class OccurrenceService {
                     Map.of("treatmentId", treatmentId, "count", past.size()));
         }
         return past.size();
+    }
+
+    /**
+     * Dose de um tratamento "se necessário": registrada quando é dada, vira
+     * uma ocorrência já administrada, sem agenda. O id vem do aparelho (pode
+     * ter sido registrada offline). Uma dose dada é aceita mesmo que o
+     * tratamento tenha sido suspenso ou encerrado enquanto o aparelho estava
+     * sem conexão: o registro do que aconteceu não se perde.
+     */
+    @Transactional
+    public DoseOccurrence recordAsNeeded(UUID familyId, UUID treatmentId, UUID requestedId, UUID deviceId,
+            Instant administeredAt, String notes, Instant recordedAt) {
+        access.requireMember(familyId);
+        devices.requireActive(deviceId);
+        Treatment t = Treatment.lockInFamily(familyId, treatmentId)
+                .orElseThrow(() -> ApiException.notFound("Tratamento"));
+        if (t.kind != Treatment.Kind.AS_NEEDED) {
+            throw ApiException.unprocessable("NOT_AS_NEEDED",
+                    "Este tratamento tem horários: registre a dose pela agenda.");
+        }
+        if (t.status == Treatment.Status.DRAFT) {
+            throw ApiException.conflict("TREATMENT_NOT_ACTIVE", "Ative o tratamento antes de registrar doses.");
+        }
+        Instant now = Instant.now();
+        Instant tapped = recordedAt == null || recordedAt.isAfter(now) ? now : recordedAt;
+        Instant at = administeredAt == null ? tapped : administeredAt;
+        requireNotFuture(at, now);
+
+        DoseOccurrence o = new DoseOccurrence();
+        o.id = ClientIds.choose(requestedId, id -> DoseOccurrence.findById(id) != null);
+        o.familyId = familyId;
+        o.treatmentId = t.id;
+        o.slotKey = "prn:" + o.id;
+        o.scheduledAt = at;
+        o.status = DoseOccurrence.Status.ADMINISTERED;
+        o.version = 1;
+        o.statusChangedBy = currentUser.id();
+        o.statusChangedAt = now;
+        o.createdAt = now;
+        o.updatedAt = now;
+        o.persist();
+        AdministrationRecord r = newRecord(o, deviceId, at, notes, now);
+        r.recordedAt = tapped;
+        r.persist();
+        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_ADMINISTERED", null, recordData(o, r), null);
+        audit.publish(familyId, "DOSE_ADMINISTERED", ENTITY, o.id, event(o));
+        return o;
     }
 
     /**
@@ -500,6 +549,15 @@ public class OccurrenceService {
                 default -> "Esta dose ainda não tem registro; registre a administração ou que ela não foi dada.";
             });
         }
+        boolean asNeeded = o.scheduleId == null;
+        if (asNeeded && (c.status() == CorrectionTarget.OPEN || c.status() == CorrectionTarget.NOT_ADMINISTERED)) {
+            throw ApiException.unprocessable("AS_NEEDED_CORRECTION",
+                    "Esta dose foi registrada quando foi dada. Se foi por engano, use \"Registrada por engano\".");
+        }
+        if (!asNeeded && c.status() == CorrectionTarget.CANCELLED) {
+            throw ApiException.unprocessable("AS_NEEDED_CORRECTION",
+                    "Só uma dose \"se necessário\" pode ser marcada como registrada por engano.");
+        }
         if (c.status() == CorrectionTarget.NOT_ADMINISTERED && o.status == DoseOccurrence.Status.NOT_ADMINISTERED
                 && java.util.Objects.equals(reason, o.statusReason)) {
             throw ApiException.unprocessable("NO_CHANGE", "A correção não altera o registro.");
@@ -528,6 +586,10 @@ public class OccurrenceService {
                 String notes = c.notes() != null ? c.notes() : previous == null ? null : previous.notes;
                 AdministrationRecord r = newRecord(o, c.deviceId(), at, notes, now);
                 r.persist();
+                if (asNeeded) {
+                    // Sem agenda, o horário da dose é o da administração.
+                    o.scheduledAt = at;
+                }
                 close(o, DoseOccurrence.Status.ADMINISTERED, null, now);
                 after = recordData(o, r);
             }
@@ -537,6 +599,10 @@ public class OccurrenceService {
             }
             case OPEN -> {
                 close(o, DoseOccurrence.Status.SCHEDULED, reason, now);
+                after = stateData(o);
+            }
+            case CANCELLED -> {
+                close(o, DoseOccurrence.Status.CANCELLED, reason, now);
                 after = stateData(o);
             }
             default -> throw new IllegalStateException();

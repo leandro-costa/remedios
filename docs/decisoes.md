@@ -224,8 +224,16 @@ São parâmetros operacionais, não orientação clínica.
   acrescentado (até 30 dias, numa versão de agenda já encerrada) são criadas,
   e o responsável diz se já foram dadas, como na ativação. Doses registradas
   nunca mudam.
-- **Uso "se necessário" (sob demanda)** ainda não é suportado: toda dose
-  pertence a uma agenda.
+- **Uso "se necessário" (sob demanda)**: tratamento `AS_NEEDED`, sem agenda.
+  Cada dose registrada vira uma ocorrência já administrada, sem versão de
+  agenda (`schedule_id` nulo, chave `prn:<id>`), e aparece no histórico como
+  as outras. O app mostra a última dose, quem deu, quantas nas últimas 24 h e
+  a orientação da receita como texto; **nunca** diz quando a próxima pode ser
+  dada nem avisa "ainda não pode" (seria sugerir dose). Os outros responsáveis
+  são avisados a cada dose, com a contagem de 24 h. Um registro errado é
+  desfeito pela correção "Registrada por engano" (`CANCELLED`), preservando o
+  original. Uma dose enviada depois de o tratamento ser suspenso ou encerrado
+  é aceita: foi dada e não pode se perder.
 
 ## Registro de doses (Fase 2)
 

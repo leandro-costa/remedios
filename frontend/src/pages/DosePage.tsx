@@ -307,7 +307,9 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
   const { deviceId } = useSession();
   const online = useOnline();
   const [openForm, setOpenForm] = useState(false);
-  const [target, setTarget] = useState<"ADMINISTERED" | "NOT_ADMINISTERED" | "OPEN">("ADMINISTERED");
+  const [target, setTarget] = useState<"ADMINISTERED" | "NOT_ADMINISTERED" | "OPEN" | "CANCELLED">("ADMINISTERED");
+  // "Se necessário": não há dose prevista para reabrir; um registro errado é desfeito.
+  const asNeeded = occurrence.treatment.kind === "AS_NEEDED";
   const [at, setAt] = useState(() =>
     toLocalInput(new Date(occurrence.administration?.administeredAt ?? Date.now())));
   const [reason, setReason] = useState("");
@@ -348,9 +350,15 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
       {error && <Notice tone="error">{error}</Notice>}
       <fieldset className="stack">
         <legend>O que aconteceu de fato?</legend>
-        <label className="radio"><input type="radio" checked={target === "ADMINISTERED"} onChange={() => setTarget("ADMINISTERED")} /> Foi administrada</label>
-        <label className="radio"><input type="radio" checked={target === "NOT_ADMINISTERED"} onChange={() => setTarget("NOT_ADMINISTERED")} /> Não foi administrada</label>
-        <label className="radio"><input type="radio" checked={target === "OPEN"} onChange={() => setTarget("OPEN")} /> Ainda não foi decidido (reabrir)</label>
+        <label className="radio"><input type="radio" checked={target === "ADMINISTERED"} onChange={() => setTarget("ADMINISTERED")} /> Foi administrada{asNeeded ? " (corrigir o horário)" : ""}</label>
+        {asNeeded ? (
+          <label className="radio"><input type="radio" checked={target === "CANCELLED"} onChange={() => setTarget("CANCELLED")} /> Registrada por engano (não foi dada)</label>
+        ) : (
+          <>
+            <label className="radio"><input type="radio" checked={target === "NOT_ADMINISTERED"} onChange={() => setTarget("NOT_ADMINISTERED")} /> Não foi administrada</label>
+            <label className="radio"><input type="radio" checked={target === "OPEN"} onChange={() => setTarget("OPEN")} /> Ainda não foi decidido (reabrir)</label>
+          </>
+        )}
       </fieldset>
       {target === "ADMINISTERED" && (
         <label>
