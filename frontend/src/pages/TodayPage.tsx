@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
-import type { OccurrenceView, PersonView, TreatmentConflictView } from "../api/types";
+import type { OccurrenceView, PersonView, TreatmentConflictView, TreatmentView } from "../api/types";
+import { AsNeededCard } from "../components/AsNeeded";
 import { Notice, Spinner } from "../components/Layout";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
@@ -32,6 +33,7 @@ export function TodayPage() {
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
   const treatmentConflicts = useCached(`treatment-conflicts:${family.id}`, () =>
     api<TreatmentConflictView[]>(`/families/${family.id}/treatments/conflicts`));
+  const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const outbox = useOutbox(family.id);
   const queued = useMemo(() => new Map(outbox.filter((i) => i.occurrenceId).map((i) => [i.occurrenceId!, i])), [outbox]);
 
@@ -40,8 +42,13 @@ export function TodayPage() {
   // ficam no histórico e no tratamento, não no dia.
   const doses = (agenda.data ?? [])
     .filter((o) => o.status !== "CANCELLED")
+    // Doses "se necessário" não são previstas: ficam no cartão do remédio, abaixo.
+    .filter((o) => o.treatment.kind !== "AS_NEEDED")
     .filter((o) => sameDay(new Date(o.scheduledAt), day))
     .filter((o) => !personId || o.person.id === personId);
+  const asNeeded = (treatments.data ?? []).filter((t) => t.kind === "AS_NEEDED" && t.status === "ACTIVE")
+    .filter((t) => !personId || t.personId === personId);
+  const personName = (id: string) => mine.has(id) ? "Você" : persons.data?.find((p) => p.id === id)?.displayName;
   const review = (agenda.data ?? []).filter((o) => o.status === "REVIEW_REQUIRED").length;
   const treatmentReview = (treatmentConflicts.data ?? []).length;
   const isToday = sameDay(day, new Date());
@@ -174,6 +181,12 @@ export function TodayPage() {
           );
         })}
       </ul>
+      {isToday && asNeeded.length > 0 && (
+        <section className="stack" aria-label="Se necessário">
+          <h2>Se necessário</h2>
+          {asNeeded.map((t) => <AsNeededCard key={t.id} treatment={t} personName={personName(t.personId)} compact />)}
+        </section>
+      )}
       {onTime && <OnTimeDialog occurrence={onTime} who={who(onTime)} onClose={() => setOnTime(null)} />}
     </div>
   );

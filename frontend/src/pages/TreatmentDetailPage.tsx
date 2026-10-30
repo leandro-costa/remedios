@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { PastDoses, RevisionView, TreatmentProgressView, TreatmentStatus, TreatmentView } from "../api/types";
+import { AsNeededCard } from "../components/AsNeeded";
 import { Icon } from "../components/Icon";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
@@ -66,7 +67,16 @@ export function TreatmentDetailPage() {
   const pastFrom = new Date(Math.max(new Date(t.startAt).getTime(), now.getTime() - MAX_BACKDATE_MS));
   const startsInPast = new Date(t.startAt) < now;
   const pastSlots = startsInPast ? slotsBetween(t.schedule, new Date(t.startAt), pastFrom, now) : [];
-  const askPast = activating && startsInPast && (pastSlots === null || pastSlots.length > 0);
+  const asNeeded = t.kind === "AS_NEEDED";
+  const askPast = !asNeeded && activating && startsInPast && (pastSlots === null || pastSlots.length > 0);
+  // "Se necessário" não tem agenda: os textos falam do tratamento, não das doses previstas.
+  const actions = ACTIONS[t.status].map((a) => !asNeeded ? a : {
+    ...a,
+    label: a.label === "Ativar agenda" ? "Ativar" : a.label,
+    confirm: a.to === "ACTIVE" ? "Ativar? O tratamento passa a aparecer em Hoje para registrar as doses quando forem dadas."
+      : a.to === "SUSPENDED" ? "Suspender? Não será possível registrar novas doses até reativar."
+      : a.confirm.replace(" As doses futuras ainda não registradas serão canceladas.", ""),
+  });
 
   async function change(action: Action) {
     setBusy(true);
@@ -116,20 +126,21 @@ export function TreatmentDetailPage() {
         <dt>Dose (da prescrição)</dt><dd>{t.prescribedDose}</dd>
         {t.route && (<><dt>Via</dt><dd>{t.route}</dd></>)}
         {t.instructions && (<><dt>Instruções</dt><dd className="pre">{t.instructions}</dd></>)}
-        <dt>Agenda</dt><dd>{describeSchedule(t.schedule)}</dd>
+        <dt>Agenda</dt><dd>{asNeeded ? "Sem horários" : describeSchedule(t.schedule)}</dd>
         <dt>Tipo</dt><dd>{TREATMENT_KIND[t.kind]}</dd>
-        <dt>Primeira dose</dt><dd>{formatWhen(t.startAt)}</dd>
+        <dt>{asNeeded ? "Início" : "Primeira dose"}</dt><dd>{formatWhen(t.startAt)}</dd>
         <dt>Término</dt>
         <dd>{t.doseCount ? `Após ${t.doseCount} ${t.doseCount === 1 ? "dose" : "doses"}` : t.endAt ? formatWhen(t.endAt) : "Sem término"}</dd>
         <dt>Versão</dt><dd>{t.version}</dd>
       </dl>
 
-      {progress && <Progress p={progress} />}
+      {asNeeded && t.status !== "DRAFT" && <AsNeededCard treatment={t} />}
+      {progress && !asNeeded && <Progress p={progress} />}
 
       {!t.conflictId && t.status !== "ENDED" && (
         <div className="row wrap">
           <Link className="btn" to={`/tratamentos/${t.id}/editar`}>Editar</Link>
-          {ACTIONS[t.status].map((a) => (
+          {actions.map((a) => (
             <button key={a.to} className={`btn ${a.primary ? "btn-primary" : ""}`} onClick={() => setPending(a)}>{a.label}</button>
           ))}
         </div>

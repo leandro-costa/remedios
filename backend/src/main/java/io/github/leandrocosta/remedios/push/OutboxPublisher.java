@@ -129,6 +129,14 @@ public class OutboxPublisher {
         String tag = "dose-" + o.id;
         String url = "/doses/" + o.id;
 
+        boolean asNeeded = t.kind == Treatment.Kind.AS_NEEDED;
+        // Doses "se necessário" dadas nas 24 h até esta (inclusive): ajuda quem não deu a saber.
+        long last24h = asNeeded && "DOSE_ADMINISTERED".equals(e.eventType) ? DoseOccurrence.count(
+                "treatmentId = ?1 and status = ?2 and scheduledAt > ?3 and scheduledAt <= ?4", t.id,
+                DoseOccurrence.Status.ADMINISTERED, o.scheduledAt.minus(java.time.Duration.ofHours(24)),
+                o.scheduledAt) : 0;
+        String count = last24h == 1 ? "1 dose nas últimas 24 h" : last24h + " doses nas últimas 24 h";
+
         List<Notice> notices = new ArrayList<>();
         for (UUID user : members) {
             boolean other = !user.equals(actor);
@@ -136,6 +144,15 @@ public class OutboxPublisher {
             UserNotificationSettings pref = prefs.get(user);
             switch (e.eventType) {
                 case "DOSE_ADMINISTERED" -> {
+                    if (asNeeded) {
+                        // "Se necessário": avisa os outros responsáveis a cada dose, com a contagem de 24 h.
+                        if (other && policy != FamilySettings.ConfirmationPolicy.NONE) {
+                            notices.add(new Notice(user, "Dose registrada", who + " deu " + detail + " às {at} · "
+                                    + count, who + " registrou uma dose às {at} · " + count, tag, url, false,
+                                    PushService.Urgency.NORMAL));
+                        }
+                        continue;
+                    }
                     // Confirmação de rotina só para quem pediu (padrão: não, seção 6.2.8).
                     boolean confirm = other && (policy == FamilySettings.ConfirmationPolicy.ALL
                             || pref.confirmationNotifications);

@@ -280,6 +280,31 @@ class NotificationTest {
     }
 
     @Test
+    void asNeededDoseNotifiesTheOthersWithTheCountOfTheLast24Hours() throws Exception {
+        String t = d.ana.req().body(AsNeededTest.asNeeded(d.person, d.now.minus(1, ChronoUnit.DAYS)))
+                .post("/api/families/{f}/treatments", d.family).then().statusCode(201).extract().path("id");
+        d.activate(t, 1, d.now);
+        outbox.publish(Instant.now().plus(1, ChronoUnit.DAYS));
+        anaPhone.take();
+        brunoPhone.take();
+
+        for (int minutesAgo : new int[] {30 * 60, 6 * 60, 0}) { // a de 30 h atrás não entra na conta
+            d.ana.req().body(Map.of("deviceId", d.anaDevice.toString(),
+                    "administeredAt", d.now.minus(minutesAgo, ChronoUnit.MINUTES).toString()))
+                    .post("/api/families/{f}/treatments/{t}/doses", d.family, t).then().statusCode(200);
+        }
+        outbox.publish(Instant.now().plus(1, ChronoUnit.DAYS));
+        List<Map<String, Object>> toBruno = brunoPhone.take();
+        assertEquals(3, toBruno.size());
+        List<String> bodies = toBruno.stream().map(m -> (String) m.get("body")).toList();
+        assertTrue(toBruno.stream().allMatch(m -> "Dose registrada".equals(m.get("title"))), toBruno.toString());
+        assertTrue(bodies.stream().anyMatch(b -> b.contains("2 doses nas últimas 24 h")), bodies.toString());
+        // Tela bloqueada sem detalhes por padrão.
+        assertTrue(bodies.stream().noneMatch(b -> b.contains("Paracetamol") || b.contains("Gabriel")), bodies.toString());
+        assertEquals(0, anaPhone.take().size(), "quem registrou não é avisado");
+    }
+
+    @Test
     void testNotificationAndUnsubscribe() throws Exception {
         d.ana.req().post("/api/me/push/test").then().statusCode(200).body("sent", equalTo(1));
         assertEquals("Notificações ativadas", anaPhone.take().getFirst().get("title"));
