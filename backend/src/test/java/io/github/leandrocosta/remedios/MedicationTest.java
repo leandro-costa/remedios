@@ -111,6 +111,46 @@ class MedicationTest {
     }
 
     @Test
+    void historyIsConsolidatedByMedicationAcrossTreatments() {
+        String med = d.ana.req().body(tylenol(null)).post("/api/families/{f}/medications", d.family)
+                .then().statusCode(201).extract().path("id");
+        // Receita com horário: a dose de 1 h atrás é dada.
+        Instant past = d.now.minus(1, java.time.temporal.ChronoUnit.HOURS);
+        String scheduled = treatment(Map.of("medicationId", med, "schedule", Dosing.dailyAt(past),
+                "startAt", past.minus(1, java.time.temporal.ChronoUnit.MINUTES).toString()));
+        d.activate(scheduled, 1, past.minus(1, java.time.temporal.ChronoUnit.MINUTES));
+        d.ana.req().body(Map.of("deviceId", d.anaDevice.toString()))
+                .post("/api/families/{f}/occurrences/{o}/administration", d.family, d.occurrenceAt(past))
+                .then().statusCode(200);
+        // Uso eventual com o mesmo medicamento.
+        Map<String, Object> prn = AsNeededTest.asNeeded(d.person, d.now.minus(1, java.time.temporal.ChronoUnit.DAYS));
+        prn.put("medicationId", med);
+        String asNeeded = d.ana.req().body(prn).post("/api/families/{f}/treatments", d.family)
+                .then().statusCode(201).extract().path("id");
+        d.activate(asNeeded, 1, d.now);
+        d.bruno.req().body(Map.of("deviceId", d.brunoDevice.toString()))
+                .post("/api/families/{f}/treatments/{t}/doses", d.family, asNeeded).then().statusCode(200);
+        // Outro medicamento não entra.
+        String other = treatment(Map.of("name", "Outro", "schedule", Dosing.dailyAt(past),
+                "startAt", past.minus(1, java.time.temporal.ChronoUnit.MINUTES).toString()));
+        d.activate(other, 1, past.minus(1, java.time.temporal.ChronoUnit.MINUTES));
+
+        List<Map<String, Object>> history = d.ana.req()
+                .queryParam("from", d.now.minus(1, java.time.temporal.ChronoUnit.DAYS).toString())
+                .queryParam("to", d.now.plus(1, java.time.temporal.ChronoUnit.HOURS).toString())
+                .queryParam("medicationId", med)
+                .get("/api/families/{f}/history", d.family).then().statusCode(200).extract().jsonPath().getList("$");
+        assertEquals(2, history.size(), history.toString());
+        assertEquals(java.util.Set.of(scheduled, asNeeded),
+                java.util.Set.of(path(history.get(0)), path(history.get(1))));
+        assertTrue(history.stream().allMatch(o -> "Tylenol".equals(((Map<?, ?>) o.get("treatment")).get("medicationName"))));
+    }
+
+    private static Object path(Map<String, Object> occurrence) {
+        return ((Map<?, ?>) occurrence.get("treatment")).get("id");
+    }
+
+    @Test
     void anvisaCatalogOnlyActiveWithoutRepeatsAndConditionalDownload() throws Exception {
         d.ana.req().get("/api/catalog/medications").then().statusCode(200).body("version", nullValue());
         catalog.importFrom(Path.of("src/test/resources/anvisa-amostra.csv").toAbsolutePath().toUri().toString());

@@ -56,7 +56,7 @@ export function MedicationFormPage() {
           effects: [{ key: medicationsKey(family.id), op: "upsert", list: true, value: { ...created, createdBy: me?.id } }],
         });
       }
-      navigate("/medicamentos", { replace: true });
+      navigate(current ? `/medicamentos/${current.id}` : "/medicamentos", { replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

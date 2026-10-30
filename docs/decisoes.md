@@ -229,6 +229,12 @@ São parâmetros operacionais, não orientação clínica.
   Os tratamentos que já existiam ganharam um medicamento por nome. Sem
   `medicationId`, o servidor liga o tratamento ao medicamento de mesmo nome
   (ou cria), para aparelhos antigos ou registros feitos offline.
+- **Histórico por medicamento, não por tratamento.** O mesmo medicamento em
+  tratamentos diferentes (uma receita com horários e o uso eventual) aparece
+  num histórico único: no Histórico (filtro por medicamento), na tela do
+  medicamento e no cartão "se necessário", cuja última dose e contagem de
+  24 h somam as doses do medicamento para aquela pessoa em todos os
+  tratamentos.
 - **Catálogo da ANVISA pelos dados abertos**, não por consulta ao site (que
   tem captcha e muda): o servidor importa o arquivo de medicamentos
   registrados e o aparelho guarda uma cópia (cerca de 12 mil itens, 180 KB

@@ -224,7 +224,11 @@ export interface OccurrenceView {
   late: boolean;
   version: number;
   person: { id: string; displayName: string };
-  treatment: { id: string; name: string; prescribedDose: string; route: string | null; kind?: TreatmentKind };
+  treatment: {
+    id: string; name: string; prescribedDose: string; route: string | null; kind?: TreatmentKind;
+    /** Medicamento da família: o histórico é consolidado por ele. */
+    medicationId?: string | null; medicationName?: string | null;
+  };
   administration: AdministrationView | null;
   statusReason: string | null;
   statusChangedBy: UserRef | null;

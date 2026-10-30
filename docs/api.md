@@ -306,7 +306,7 @@ Efeitos na agenda:
 | POST | `/api/families/{f}/occurrences/{o}/resolution` | conferência de conflito: `{baseVersion, status, reason, proposalId?, administeredAt?, deviceId?}` |
 | GET | `/api/families/{f}/conflicts` | doses aguardando conferência, com as propostas |
 | POST | `/api/families/{f}/occurrences/{o}/correction` | `{baseVersion, status, reason, administeredAt?, notes?, deviceId?}`; `status`: `ADMINISTERED`, `NOT_ADMINISTERED`, `OPEN` ou, só para "se necessário", `CANCELLED` |
-| GET | `/api/families/{f}/history?from=&to=&personId=&treatmentId=&recordedBy=&limit=` | doses com desfecho (administrada ou não), mais recentes primeiro |
+| GET | `/api/families/{f}/history?from=&to=&personId=&treatmentId=&medicationId=&recordedBy=&limit=` | doses com desfecho (administrada ou não), mais recentes primeiro. Com `medicationId`, **consolidado por medicamento**: as doses dele em todos os tratamentos (receitas e uso eventual). Cada dose traz `treatment.medicationId` e `treatment.medicationName` |
 
 Cada dose traz:
 
