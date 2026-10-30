@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { PersonView, TreatmentKind, TreatmentView } from "../api/types";
+import type { PastDoses, PersonView, TreatmentKind, TreatmentView } from "../api/types";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
 import { useCached } from "../hooks/useCached";
 import { useOnline } from "../hooks/useOnline";
 import { TREATMENT_KIND } from "../lib/labels";
-import { describeSchedule, dosesInDays, emptyScheduleForm, formFromRule, planCourse, ruleFromForm, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
+import { describeSchedule, dosesInDays, emptyScheduleForm, formFromRule, planCourse, ruleFromForm, slotsBetween, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
 import { deviceTimezone, formatWhen, fromLocalInput, startOfDay, toLocalInput } from "../lib/time";
 import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
@@ -78,6 +78,8 @@ export function TreatmentFormPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  /** Início antecipado num tratamento ativo: as doses do período acrescentado já foram dadas? */
+  const [pastDoses, setPastDoses] = useState<PastDoses | null>(null);
 
   useEffect(() => {
     if (!stored.data || current) return;
@@ -136,7 +138,10 @@ export function TreatmentFormPage() {
         // alteração fica preservada para conferência (seção 10.2).
         await mutate({
           familyId: family.id, method: "PUT", path: `/families/${family.id}/treatments/${current.id}`,
-          body: { ...body, baseVersion: current.version, effectiveFrom: fromLocalInput(form.effectiveFrom), reason: form.reason.trim() || null },
+          body: {
+            ...body, baseVersion: current.version, effectiveFrom: fromLocalInput(form.effectiveFrom), reason: form.reason.trim() || null,
+            pastDoses: pastDoses ?? "OPEN", deviceId,
+          },
           queuedBody: { preserveConflict: true, deviceId },
           label: `Alteração do tratamento ${body.name}`,
           effects: [
@@ -186,6 +191,19 @@ export function TreatmentFormPage() {
     }
   };
 
+  // Início alterado num tratamento ativo: as doses são reavaliadas (o servidor
+  // cancela as em aberto antes do novo início e cria as do período antecipado).
+  const now = new Date();
+  const oldStart = current ? new Date(current.startAt) : null;
+  const newStart = new Date(form.startAt);
+  const startMoved = !asNeeded && current?.status === "ACTIVE" && oldStart !== null && oldStart.getTime() !== newStart.getTime();
+  const startLater = startMoved && newStart > oldStart!;
+  const startEarlier = startMoved && newStart < oldStart!;
+  const gapFrom = new Date(Math.max(newStart.getTime(), now.getTime() - 30 * 86_400_000 + 5 * 60_000));
+  const gapTo = new Date(Math.min(oldStart?.getTime() ?? 0, now.getTime()));
+  const gapSlots = startEarlier && gapFrom < gapTo ? slotsBetween(ruleFromForm(form.schedule), newStart, gapFrom, gapTo) : [];
+  const askPast = startEarlier && (gapSlots === null || gapSlots.length > 0);
+
   if (reviewing) {
     return (
       <div className="page">
@@ -212,11 +230,36 @@ export function TreatmentFormPage() {
           {current && (<><dt>Vale a partir de</dt><dd>{new Date(form.effectiveFrom).toLocaleString("pt-BR")}</dd></>)}
         </dl>
         {!online && <Notice tone="warn">Sem conexão: fica guardado neste aparelho e é enviado quando a conexão voltar.</Notice>}
+        {startLater && (
+          <Notice tone="warn">
+            O início passa de {formatWhen(oldStart!.toISOString())} para {formatWhen(newStart.toISOString())}: as doses sem registro antes disso
+            serão canceladas. Doses já registradas continuam no histórico.
+          </Notice>
+        )}
+        {askPast && (
+          <fieldset className="stack card">
+            <legend>
+              O início foi antecipado para {formatWhen(newStart.toISOString())}.{" "}
+              {gapSlots === null
+                ? "As doses previstas desde então já foram dadas?"
+                : `${gapSlots.length === 1 ? "A dose prevista" : `As ${gapSlots.length} doses previstas`} antes do início antigo já ${gapSlots.length === 1 ? "foi dada" : "foram dadas"}?`}
+            </legend>
+            {gapFrom > newStart && <p className="muted small">Só entram as doses dos últimos 30 dias.</p>}
+            <label className="radio">
+              <input type="radio" name="past" checked={pastDoses === "ADMINISTERED"} onChange={() => setPastDoses("ADMINISTERED")} />
+              Sim, foram dadas nos horários previstos (registrar como administradas)
+            </label>
+            <label className="radio">
+              <input type="radio" name="past" checked={pastDoses === "OPEN"} onChange={() => setPastDoses("OPEN")} />
+              Não sei ou nem todas: deixar para registrar uma a uma
+            </label>
+          </fieldset>
+        )}
         {current?.status === "ACTIVE" && !asNeeded && (
           <Notice>Se a agenda, o início ou o término mudaram, as doses futuras ainda não registradas serão recalculadas. Doses passadas e registros não mudam.</Notice>
         )}
         <div className="row">
-          <button className="btn btn-primary" disabled={busy} onClick={() => void save()}>Salvar</button>
+          <button className="btn btn-primary" disabled={busy || (askPast && !pastDoses)} onClick={() => void save()}>Salvar</button>
           <button className="btn" onClick={() => setReviewing(false)}>Voltar e editar</button>
         </div>
       </div>

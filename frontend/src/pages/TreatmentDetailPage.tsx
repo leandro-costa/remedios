@@ -141,7 +141,7 @@ export function TreatmentDetailPage() {
         <div className="row wrap">
           <Link className="btn" to={`/tratamentos/${t.id}/editar`}>Editar</Link>
           {actions.map((a) => (
-            <button key={a.to} className={`btn ${a.primary ? "btn-primary" : ""}`} onClick={() => setPending(a)}>{a.label}</button>
+            <button key={a.to} className={`btn ${a.primary ? "btn-primary" : ""}`} disabled={busy} onClick={() => setPending(a)}>{a.label}</button>
           ))}
         </div>
       )}

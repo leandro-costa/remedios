@@ -218,7 +218,12 @@ São parâmetros operacionais, não orientação clínica.
 - **`PENDING` e "atrasada" são calculados** na leitura. O banco guarda
   `SCHEDULED` até haver desfecho, sem job para trocar estados.
 - **Ativação retroativa limitada a 30 dias** (eram 24 h; veja "Doses
-  anteriores à ativação"). Tratamentos ativos só mudam do presente em diante.
+  anteriores à ativação"). Tratamentos ativos só mudam do presente em diante,
+  com uma exceção: **mudar o início** reavalia as doses. Adiado, as doses em
+  aberto antes do novo início são canceladas; antecipado, as do período
+  acrescentado (até 30 dias, numa versão de agenda já encerrada) são criadas,
+  e o responsável diz se já foram dadas, como na ativação. Doses registradas
+  nunca mudam.
 - **Excluir tratamento cadastrado por engano** é ocultar, não apagar
   (`treatment.deleted_at`, `deleted_by`, `delete_reason`, V11). Só
   administradores, com motivo, em qualquer situação (inclusive encerrado). O
