@@ -128,7 +128,7 @@ conta se associa a no máximo um perfil por família.
 | GET | `/api/families/{f}/treatments?personId=&status=` | lista |
 | POST | `/api/families/{f}/treatments` | cria em `DRAFT`, versão 1 |
 | GET | `/api/families/{f}/treatments/{t}` | |
-| PUT | `/api/families/{f}/treatments/{t}` | altera o conteúdo; exige `baseVersion` e `effectiveFrom` |
+| PUT | `/api/families/{f}/treatments/{t}` | altera o conteúdo; exige `baseVersion` e `effectiveFrom`. Início alterado num tratamento ativo reavalia as doses: as em aberto antes do novo início são canceladas; se antecipado, as do período acrescentado (até 30 dias) são criadas, em aberto ou, com `pastDoses: "ADMINISTERED"` e `deviceId`, registradas nos horários previstos |
 | POST | `/api/families/{f}/treatments/{t}/status` | `{status, baseVersion, effectiveFrom?, reason?, pastDoses?, deviceId?}` |
 | GET | `/api/families/{f}/treatments/{t}/revisions` | todas as versões, com fotografia e autoria |
 | GET | `/api/families/{f}/treatments/conflicts` | alterações feitas offline aguardando conferência |

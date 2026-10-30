@@ -60,6 +60,24 @@ public class ScheduleService {
     /** Cria uma nova versão vigente a partir de {@code effectiveFrom} e gera as doses. */
     @Transactional(Transactional.TxType.MANDATORY)
     public TreatmentSchedule start(Treatment treatment, Instant effectiveFrom) {
+        TreatmentSchedule s = newVersion(treatment, effectiveFrom, null);
+        generate(s, treatment, Instant.now().plus(horizon));
+        return s;
+    }
+
+    /**
+     * Doses de um período passado que ficou de fora (o início do tratamento
+     * foi antecipado): uma versão já encerrada, de {@code from} a {@code to},
+     * com a regra atual.
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public TreatmentSchedule backfill(Treatment treatment, Instant from, Instant to) {
+        TreatmentSchedule s = newVersion(treatment, from, to);
+        generate(s, treatment, to);
+        return s;
+    }
+
+    private TreatmentSchedule newVersion(Treatment treatment, Instant validFrom, Instant validUntil) {
         ScheduleRule rule = fromStored(treatment.scheduleRule);
         FamilySettings defaults = FamilySettings.findById(treatment.familyId);
         ScheduleRule.Reminders r = rule.reminders() == null
@@ -76,11 +94,11 @@ public class ScheduleService {
         s.repeatLimit = or(r.repeatLimit(), defaults.repeatLimit);
         s.lateToleranceMinutes = or(r.lateToleranceMinutes(), defaults.lateToleranceMinutes);
         s.version = TreatmentSchedule.lastVersion(treatment.id) + 1;
-        s.validFrom = effectiveFrom;
+        s.validFrom = validFrom;
+        s.validUntil = validUntil;
         s.createdAt = Instant.now();
         s.persist();
         em.flush();
-        generate(s, treatment, Instant.now().plus(horizon));
         return s;
     }
 
@@ -126,6 +144,26 @@ public class ScheduleService {
                 .setParameter("now", now)
                 .setParameter("treatment", treatment.id)
                 .setParameter("from", effectiveFrom)
+                .executeUpdate();
+    }
+
+    /** Cancela as doses em aberto anteriores a {@code before} (ex.: o início foi adiado). */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public int cancelOpenBefore(Treatment treatment, Instant before, UUID actor, String reason) {
+        Instant now = Instant.now();
+        return em.createQuery("""
+                update DoseOccurrence o
+                   set o.status = :cancelled, o.statusReason = :reason, o.statusChangedBy = :actor,
+                       o.statusChangedAt = :now, o.updatedAt = :now, o.version = o.version + 1
+                 where o.treatmentId = :treatment and o.status = :open and o.scheduledAt < :before
+                """)
+                .setParameter("cancelled", DoseOccurrence.Status.CANCELLED)
+                .setParameter("open", DoseOccurrence.Status.SCHEDULED)
+                .setParameter("reason", reason)
+                .setParameter("actor", actor)
+                .setParameter("now", now)
+                .setParameter("treatment", treatment.id)
+                .setParameter("before", before)
                 .executeUpdate();
     }
 

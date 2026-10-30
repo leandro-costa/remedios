@@ -103,9 +103,19 @@ public class OccurrenceService {
      */
     @Transactional(Transactional.TxType.MANDATORY)
     public int recordPastAsAdministered(UUID familyId, UUID treatmentId, UUID deviceId, Instant now) {
-        List<DoseOccurrence> past = DoseOccurrence.list(
-                "familyId = ?1 and treatmentId = ?2 and status = ?3 and scheduledAt <= ?4 order by scheduledAt",
-                familyId, treatmentId, DoseOccurrence.Status.SCHEDULED, now);
+        return recordPastAsAdministered(familyId, treatmentId, null, deviceId, now);
+    }
+
+    /** Idem, só as doses de uma versão de agenda (ex.: o período acrescentado ao antecipar o início). */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public int recordPastAsAdministered(UUID familyId, UUID treatmentId, UUID scheduleId, UUID deviceId,
+            Instant now) {
+        String query = "familyId = ?1 and treatmentId = ?2 and status = ?3 and scheduledAt <= ?4";
+        List<DoseOccurrence> past = scheduleId == null
+                ? DoseOccurrence.list(query + " order by scheduledAt", familyId, treatmentId,
+                        DoseOccurrence.Status.SCHEDULED, now)
+                : DoseOccurrence.list(query + " and scheduleId = ?5 order by scheduledAt", familyId, treatmentId,
+                        DoseOccurrence.Status.SCHEDULED, now, scheduleId);
         for (DoseOccurrence o : past) {
             AdministrationRecord r = newRecord(o, deviceId, o.scheduledAt, PAST_DOSES_NOTE, now);
             r.persist();

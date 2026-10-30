@@ -108,7 +108,9 @@ public class TreatmentResource {
             @Size(max = 1000) String reason,
             /** Fila offline: preservar como conflito se a versão-base estiver desatualizada. */
             Boolean preserveConflict,
-            UUID deviceId) {
+            UUID deviceId,
+            /** Início antecipado num tratamento ativo: o que fazer com as doses do período acrescentado. */
+            TreatmentService.PastDoses pastDoses) {
     }
 
     public record ChangeStatus(
@@ -167,6 +169,7 @@ public class TreatmentResource {
                 new TreatmentService.TreatmentData(r.name(), r.kind(), r.prescribedDose(), r.route(),
                         r.instructions(), r.startAt(), r.endAt(), r.schedule(), r.doseCount()),
                 new TreatmentService.Change(r.baseVersion(), r.effectiveFrom(), r.reason()),
+                r.pastDoses() == null ? TreatmentService.PastDoses.OPEN : r.pastDoses(), r.deviceId(),
                 offline(r.preserveConflict(), r.deviceId(), operationKey, r));
         return respond(outcome);
     }

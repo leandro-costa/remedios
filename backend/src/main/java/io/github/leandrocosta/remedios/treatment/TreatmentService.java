@@ -10,6 +10,7 @@ import io.github.leandrocosta.remedios.family.FamilyAccess;
 import io.github.leandrocosta.remedios.person.Person;
 import io.github.leandrocosta.remedios.schedule.ScheduleRule;
 import io.github.leandrocosta.remedios.schedule.ScheduleService;
+import io.github.leandrocosta.remedios.schedule.TreatmentSchedule;
 import io.github.leandrocosta.remedios.occurrence.OccurrenceService;
 import io.github.leandrocosta.remedios.sync.SyncConflict;
 import io.github.leandrocosta.remedios.sync.SyncConflictChange;
@@ -161,17 +162,25 @@ public class TreatmentService {
 
     @Transactional
     public Treatment update(UUID familyId, UUID treatmentId, TreatmentData data, Change change) {
-        return update(familyId, treatmentId, data, change, null).treatment();
+        return update(familyId, treatmentId, data, change, PastDoses.OPEN, null, null).treatment();
     }
 
+    /**
+     * Altera o conteúdo. Se o início de um tratamento ativo mudou, as doses
+     * são reavaliadas: as em aberto antes do novo início são canceladas e,
+     * se o início foi antecipado, as doses do período acrescentado (até 30
+     * dias) são criadas, em aberto ou, se o responsável informar que foram
+     * dadas ({@code pastDoses}), registradas nos horários previstos.
+     */
     @Transactional
-    public Outcome update(UUID familyId, UUID treatmentId, TreatmentData data, Change change, Offline offline) {
+    public Outcome update(UUID familyId, UUID treatmentId, TreatmentData data, Change change, PastDoses pastDoses,
+            UUID deviceId, Offline offline) {
         Treatment t = lock(familyId, treatmentId);
         Optional<UUID> preserved = checkVersion(t, change, offline, "UPDATE");
         if (preserved.isPresent()) {
             return new Outcome(t, preserved.get());
         }
-        return new Outcome(applyUpdate(t, data, effective(t, change, offline)), null);
+        return new Outcome(applyUpdate(t, data, effective(t, change, offline), pastDoses, deviceId), null);
     }
 
     @Transactional
@@ -259,12 +268,13 @@ public class TreatmentService {
             UUID device = p.get("deviceId") == null ? null : UUID.fromString((String) p.get("deviceId"));
             return applyStatus(t, target, change, past, device);
         }
-        return applyUpdate(t, json.convertValue(p, TreatmentData.class), change);
+        return applyUpdate(t, json.convertValue(p, TreatmentData.class), change, PastDoses.OPEN, null);
     }
 
     // --- Auxiliares -----------------------------------------------------------
 
-    private Treatment applyUpdate(Treatment t, TreatmentData data, Change change) {
+    private Treatment applyUpdate(Treatment t, TreatmentData data, Change change, PastDoses pastDoses,
+            UUID deviceId) {
         if (t.status == Treatment.Status.ENDED) {
             throw ApiException.conflict("TREATMENT_ENDED", "Tratamentos encerrados não podem ser alterados.");
         }
@@ -281,7 +291,10 @@ public class TreatmentService {
             if (t.scheduleRule == null) {
                 throw scheduleRequired();
             }
-            if (affectsSchedule(before, after)) {
+            Instant previousStart = Instant.parse((String) before.get("startAt"));
+            if (!previousStart.equals(t.startAt)) {
+                reevaluateStart(t, previousStart, change, pastDoses, deviceId);
+            } else if (affectsSchedule(before, after)) {
                 // Só doses futuras em aberto são recalculadas; o passado fica como está.
                 restartSchedule(t, change, "Agenda alterada");
             }
@@ -428,6 +441,42 @@ public class TreatmentService {
             throw ApiException.unprocessable("EFFECTIVE_FROM_IN_PAST",
                     "A alteração de um tratamento já ativado não pode valer para o passado.");
         }
+    }
+
+    /**
+     * Início alterado num tratamento ativo: as doses deixam de seguir o
+     * início antigo. Registros feitos nunca mudam; só doses em aberto.
+     */
+    private void reevaluateStart(Treatment t, Instant previousStart, Change change, PastDoses pastDoses,
+            UUID deviceId) {
+        boolean recordPast = pastDoses == PastDoses.ADMINISTERED && t.startAt.isBefore(previousStart);
+        if (recordPast) {
+            devices.requireActive(deviceId);
+        }
+        Instant now = Instant.now();
+        stopSchedule(t, change, "Início alterado");
+        // Em aberto antes do novo início: não fazem mais parte do tratamento.
+        int cancelled = schedules.cancelOpenBefore(t, t.startAt, currentUser.id(), "Início alterado");
+        if (cancelled > 0) {
+            audit.record(t.familyId, currentUser.id(), TREATMENT, t.id, "OCCURRENCES_CANCELLED", null,
+                    Map.of("count", cancelled, "before", t.startAt.toString()), "Início alterado");
+        }
+        // Início antecipado: o período que ficou de fora, até 30 dias atrás.
+        Instant gapFrom = max(t.startAt, now.minus(MAX_ACTIVATION_BACKDATE));
+        Instant gapTo = min(previousStart, change.effectiveFrom());
+        TreatmentSchedule gap = gapFrom.isBefore(gapTo) ? schedules.backfill(t, gapFrom, gapTo) : null;
+        schedules.start(t, change.effectiveFrom());
+        if (gap != null && recordPast) {
+            occurrences.recordPastAsAdministered(t.familyId, t.id, gap.id, deviceId, now);
+        }
+    }
+
+    private static Instant max(Instant a, Instant b) {
+        return a.isAfter(b) ? a : b;
+    }
+
+    private static Instant min(Instant a, Instant b) {
+        return a.isBefore(b) ? a : b;
     }
 
     private void restartSchedule(Treatment t, Change change, String reason) {
