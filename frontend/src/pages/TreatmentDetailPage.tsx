@@ -113,6 +113,9 @@ export function TreatmentDetailPage() {
         <strong className="dose-hero-name">{t.name}</strong>
         <span className={`badge badge-t-${t.status.toLowerCase()}`}>{TREATMENT_STATUS[t.status]}</span>
       </section>
+      {t.prescriptionId && (
+        <p><Link to={`/receitas/${t.prescriptionId}`} className="link">Ver a receita deste remédio →</Link></p>
+      )}
       {!treatment.fresh && <Notice tone="warn">Sem conexão: dados guardados neste aparelho. Alterações ficam guardadas e são enviadas quando a conexão voltar.</Notice>}
       {isPending(t) && <Notice tone="warn">Alteração aguardando envio. As doses aparecem depois que o servidor confirmar.</Notice>}
       {t.conflictId && (

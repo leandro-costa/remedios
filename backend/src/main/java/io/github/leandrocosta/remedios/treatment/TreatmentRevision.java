@@ -39,7 +39,8 @@ public class TreatmentRevision extends PanacheEntityBase {
     @Column(name = "change_reason")
     public String changeReason;
 
-    @Column(name = "created_by", nullable = false)
+    /** Nulo quando foi o próprio sistema (ex.: fim do período previsto). */
+    @Column(name = "created_by")
     public UUID createdBy;
 
     @Column(name = "created_at", nullable = false)

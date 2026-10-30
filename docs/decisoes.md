@@ -229,6 +229,12 @@ São parâmetros operacionais, não orientação clínica.
   Os tratamentos que já existiam ganharam um medicamento por nome. Sem
   `medicationId`, o servidor liga o tratamento ao medicamento de mesmo nome
   (ou cria), para aparelhos antigos ou registros feitos offline.
+- **Receita com vários itens** (V13): cada item continua sendo um tratamento,
+  e a receita os agrupa (título, quem prescreveu, data). Os tratamentos que
+  já existiam viraram receitas de um item. A situação da receita é calculada
+  pelos itens, nunca guardada. Itens com término são encerrados pelo sistema
+  ao fim do período (auditoria sem autor); quando acabam os itens com horário,
+  os "se necessário" da receita terminam junto.
 - **Histórico por medicamento, não por tratamento.** O mesmo medicamento em
   tratamentos diferentes (uma receita com horários e o uso eventual) aparece
   num histórico único: no Histórico (filtro por medicamento), na tela do

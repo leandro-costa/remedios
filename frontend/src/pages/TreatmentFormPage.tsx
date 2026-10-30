@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { api, ApiError, errorMessage } from "../api/client";
 import type { MedicationView, PastDoses, PersonView, TreatmentKind, TreatmentView } from "../api/types";
 import { bodyFrom, CatalogSuggestions, draftFromCatalog, emptyDraft, MedicationFields, useCatalog, type MedicationDraft } from "../components/MedicationFields";
 import { normalize } from "../lib/catalog";
 import { describeSubstances, medicationsKey, useMedications } from "./MedicationsPage";
+import { PrescriptionFields, type PrescriptionDraft } from "./PrescriptionFormPage";
+import { prescriptionStatus, prescriptionTitle, prescriptionsKey, usePrescriptions } from "../lib/prescriptions";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
@@ -89,6 +91,18 @@ export function TreatmentFormPage() {
   const [typing, setTyping] = useState(false);
   /** Início antecipado num tratamento ativo: as doses do período acrescentado já foram dadas? */
   const [pastDoses, setPastDoses] = useState<PastDoses | null>(null);
+  // Receita do item: uma existente da pessoa (?receita= na tela da receita) ou uma nova.
+  const [params] = useSearchParams();
+  const prescriptions = usePrescriptions();
+  const allTreatments = useCached(editing ? null : `treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
+  const [prescriptionId, setPrescriptionId] = useState(params.get("receita") ?? "");
+  const [newPrescription, setNewPrescription] = useState<PrescriptionDraft>({ title: "", prescriber: "", prescribedOn: "", notes: "" });
+  const fixedPrescription = params.get("receita") ? prescriptions.data?.find((p) => p.id === params.get("receita")) : undefined;
+  useEffect(() => {
+    if (fixedPrescription && !form.personId) setForm((f) => ({ ...f, personId: fixedPrescription.personId }));
+  }, [fixedPrescription, form.personId]);
+  const openPrescriptions = (prescriptions.data ?? []).filter((p) => p.personId === form.personId
+    && prescriptionStatus((allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id)) !== "ENDED");
 
   useEffect(() => {
     if (!stored.data || current) return;
@@ -187,15 +201,29 @@ export function TreatmentFormPage() {
         });
         navigate(`/tratamentos/${current.id}`, { replace: true });
       } else {
-        // Id gerado aqui: o tratamento já pode ser aberto e ativado offline.
+        // Ids gerados aqui: a receita e o tratamento já podem ser abertos e ativados offline.
         const now = new Date().toISOString();
+        let receita = prescriptionId;
+        if (!receita) {
+          receita = crypto.randomUUID();
+          const data = {
+            personId: form.personId, title: newPrescription.title.trim() || null, prescriber: newPrescription.prescriber.trim() || null,
+            prescribedOn: newPrescription.prescribedOn || null, notes: newPrescription.notes.trim() || null,
+          };
+          await mutate({
+            familyId: family.id, method: "POST", path: `/families/${family.id}/prescriptions`, body: { ...data, id: receita },
+            label: `Nova receita${data.title ? `: ${data.title}` : ""}`, entityId: receita,
+            effects: [{ key: prescriptionsKey(family.id), op: "upsert", list: true,
+              value: { ...data, id: receita, status: "DRAFT", items: [], createdAt: now, updatedAt: now } }],
+          });
+        }
         const created: TreatmentView = {
           ...body, id: crypto.randomUUID(), personId: form.personId, status: "DRAFT", version: 1, conflictId: null,
-          createdBy: me?.id ?? "", createdAt: now, updatedBy: me?.id ?? "", updatedAt: now,
+          createdBy: me?.id ?? "", createdAt: now, updatedBy: me?.id ?? "", updatedAt: now, prescriptionId: receita,
         };
         await mutate({
           familyId: family.id, method: "POST", path: `/families/${family.id}/treatments`,
-          body: { ...body, id: created.id, personId: form.personId },
+          body: { ...body, id: created.id, personId: form.personId, prescriptionId: receita },
           label: `Novo tratamento: ${body.name}`,
           effects: [
             { key: `treatment:${created.id}`, op: "upsert", value: { ...created } },
@@ -249,6 +277,14 @@ export function TreatmentFormPage() {
         <ScreenBar title="Confira antes de salvar" onBack={() => setReviewing(false)} />
         <dl className="facts card">
           <dt>Pessoa</dt><dd>{person?.displayName ?? "—"}</dd>
+          {!current && (
+            <>
+              <dt>Receita</dt>
+              <dd>{prescriptionId
+                ? prescriptionTitle(prescriptions.data?.find((p) => p.id === prescriptionId), (allTreatments.data ?? []).filter((t) => t.prescriptionId === prescriptionId))
+                : `Nova receita${newPrescription.title.trim() ? `: ${newPrescription.title.trim()}` : ""}`}</dd>
+            </>
+          )}
           <dt>Medicamento</dt>
           <dd>
             {form.name}
@@ -326,15 +362,44 @@ export function TreatmentFormPage() {
         </Notice>
       )}
 
-      {!editing && (
+      {!editing && fixedPrescription && (
+        <p className="muted">Receita: <strong>{prescriptionTitle(fixedPrescription, (allTreatments.data ?? []).filter((t) => t.prescriptionId === fixedPrescription.id))}</strong></p>
+      )}
+      {!editing && !fixedPrescription && (
         <label>
           Pessoa
-          <select value={form.personId} onChange={(e) => set({ personId: e.target.value })} required>
+          <select value={form.personId} onChange={(e) => { set({ personId: e.target.value }); setPrescriptionId(""); }} required>
             <option value="">Escolha…</option>
             {(persons.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
           </select>
           {persons.data?.length === 0 && <span className="small">Cadastre as pessoas na aba Família.</span>}
         </label>
+      )}
+      {!editing && !fixedPrescription && form.personId && (
+        <fieldset className="stack">
+          <legend>Receita</legend>
+          {openPrescriptions.length > 0 && (
+            <label>
+              Incluir em
+              <select value={prescriptionId} onChange={(e) => setPrescriptionId(e.target.value)}>
+                <option value="">Nova receita</option>
+                {openPrescriptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {prescriptionTitle(p, (allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id))}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!prescriptionId && (
+            <details>
+              <summary>Dados da receita (título, quem prescreveu, data)</summary>
+              <div className="stack">
+                <PrescriptionFields value={newPrescription} onChange={setNewPrescription} />
+              </div>
+            </details>
+          )}
+        </fieldset>
       )}
       <label>
         Medicamento

@@ -10,6 +10,8 @@ import { MeasurementFormPage } from "./pages/MeasurementFormPage";
 import { MedicationDetailPage } from "./pages/MedicationDetailPage";
 import { MedicationFormPage } from "./pages/MedicationFormPage";
 import { MedicationsPage } from "./pages/MedicationsPage";
+import { PrescriptionFormPage } from "./pages/PrescriptionFormPage";
+import { PrescriptionPage } from "./pages/PrescriptionPage";
 import { SymptomFormPage } from "./pages/SymptomFormPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
@@ -45,6 +47,8 @@ export function App() {
             <Route path="tratamentos/novo" element={<TreatmentFormPage />} />
             <Route path="tratamentos/:id" element={<TreatmentDetailPage />} />
             <Route path="tratamentos/:id/editar" element={<TreatmentFormPage />} />
+            <Route path="receitas/:id" element={<PrescriptionPage />} />
+            <Route path="receitas/:id/editar" element={<PrescriptionFormPage />} />
             <Route path="medicamentos" element={<MedicationsPage />} />
             <Route path="medicamentos/novo" element={<MedicationFormPage />} />
             <Route path="medicamentos/:id" element={<MedicationDetailPage />} />
