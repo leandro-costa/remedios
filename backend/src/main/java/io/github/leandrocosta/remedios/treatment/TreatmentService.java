@@ -101,7 +101,7 @@ public class TreatmentService {
 
     public List<Treatment> list(UUID familyId, UUID personId, Treatment.Status status) {
         access.requireMember(familyId);
-        StringBuilder query = new StringBuilder("familyId = :familyId");
+        StringBuilder query = new StringBuilder("familyId = :familyId and deletedAt is null");
         Map<String, Object> params = new HashMap<>();
         params.put("familyId", familyId);
         if (personId != null) {
@@ -193,6 +193,44 @@ public class TreatmentService {
             return new Outcome(t, preserved.get());
         }
         return new Outcome(applyStatus(t, target, effective(t, change, offline), pastDoses, deviceId), null);
+    }
+
+    /**
+     * Exclui um tratamento cadastrado por engano, em qualquer situação (até
+     * encerrado). Só administradores. Nada é apagado: o tratamento, as doses e
+     * os registros ficam no banco e na auditoria, mas somem de todas as telas
+     * e contagens. Doses em aberto são canceladas e a agenda para.
+     */
+    @Transactional
+    public void delete(UUID familyId, UUID treatmentId, long baseVersion, String reason) {
+        access.requireAdmin(familyId);
+        Treatment t = lock(familyId, treatmentId);
+        if (t.version != baseVersion) {
+            throw new VersionConflictException("O tratamento", t.version);
+        }
+        String why = Texts.clean(reason);
+        Instant now = Instant.now();
+        UUID actor = currentUser.id();
+        Map<String, Object> before = snapshot(t);
+        int cancelled = schedules.stop(t, now, actor, "Tratamento excluído");
+        t.deletedAt = now;
+        t.deletedBy = actor;
+        t.deleteReason = why;
+        t.updatedAt = now;
+        t.updatedBy = actor;
+        // Alterações feitas offline aguardando conferência deixam de fazer sentido.
+        SyncConflict.<SyncConflict>list("entityType = ?1 and entityId = ?2 and status = ?3", TREATMENT, t.id,
+                SyncConflict.Status.OPEN).forEach(c -> {
+                    c.status = SyncConflict.Status.RESOLVED;
+                    c.resolution = Map.of("deleted", true, "reason", why);
+                    c.resolvedBy = actor;
+                    c.resolvedAt = now;
+                });
+        Map<String, Object> after = new LinkedHashMap<>(before);
+        after.put("deletedAt", now.toString());
+        after.put("cancelledOccurrences", cancelled);
+        audit.record(familyId, actor, TREATMENT, t.id, "TREATMENT_DELETED", before, after, why);
+        audit.publish(familyId, "TREATMENT_DELETED", TREATMENT, t.id, event(t));
     }
 
     /** Alterações preservadas aguardando conferência, por tratamento. */

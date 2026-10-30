@@ -104,7 +104,7 @@ public class OutboxPublisher {
         return switch (e.eventType) {
             case "DOSE_ADMINISTERED", "DOSE_NOT_ADMINISTERED", "DOSE_CORRECTED", "DOSE_CONFLICT_OPENED",
                     "DOSE_CONFLICT_RESOLVED" -> dose(e, uuid(p.get("occurrenceId")));
-            case "TREATMENT_CREATED", "TREATMENT_UPDATED", "TREATMENT_STATUS_CHANGED" ->
+            case "TREATMENT_CREATED", "TREATMENT_UPDATED", "TREATMENT_STATUS_CHANGED", "TREATMENT_DELETED" ->
                 treatment(e, uuid(p.get("treatmentId")));
             case "TREATMENT_CONFLICT_OPENED" -> treatmentConflict(e, uuid(p.get("treatmentId")));
             case "MEMBER_JOINED", "MEMBER_REMOVED" -> member(e, uuid(p.get("userId")));
@@ -203,6 +203,7 @@ public class OutboxPublisher {
         String who = name(t.updatedBy);
         String verb = switch (e.eventType) {
             case "TREATMENT_CREATED" -> "cadastrou";
+            case "TREATMENT_DELETED" -> "excluiu (cadastrado por engano)";
             case "TREATMENT_STATUS_CHANGED" -> switch (t.status) {
                 case ACTIVE -> "ativou";
                 case SUSPENDED -> "suspendeu";
@@ -213,7 +214,8 @@ public class OutboxPublisher {
         };
         return notifier.members(e.familyId).stream().filter(u -> !u.equals(t.updatedBy))
                 .map(u -> new Notice(u, "Tratamento atualizado", who + " " + verb + ": " + t.name + " (" + person.displayName + ")",
-                        who + " " + verb + " um tratamento.", "treatment-" + t.id, "/tratamentos/" + t.id, false,
+                        who + " " + verb + " um tratamento.", "treatment-" + t.id,
+                        t.deletedAt != null ? "/tratamentos" : "/tratamentos/" + t.id, false,
                         PushService.Urgency.NORMAL))
                 .toList();
     }

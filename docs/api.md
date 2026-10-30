@@ -128,6 +128,7 @@ conta se associa a no máximo um perfil por família.
 | GET | `/api/families/{f}/treatments?personId=&status=` | lista |
 | POST | `/api/families/{f}/treatments` | cria em `DRAFT`, versão 1 |
 | GET | `/api/families/{f}/treatments/{t}` | |
+| POST | `/api/families/{f}/treatments/{t}/deletion` | exclui um tratamento cadastrado por engano, em qualquer situação: `{baseVersion, reason}`; só administradores (`403`). Nada é apagado: some das listas, de Hoje, do histórico e das contagens (consultas dele e das doses dão `404`), cancela as doses em aberto e fecha conferências pendentes; fica na auditoria e na exportação. `204` |
 | PUT | `/api/families/{f}/treatments/{t}` | altera o conteúdo; exige `baseVersion` e `effectiveFrom` |
 | POST | `/api/families/{f}/treatments/{t}/status` | `{status, baseVersion, effectiveFrom?, reason?, pastDoses?, deviceId?}` |
 | GET | `/api/families/{f}/treatments/{t}/revisions` | todas as versões, com fotografia e autoria |

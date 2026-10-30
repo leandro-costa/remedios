@@ -107,12 +107,22 @@ public class Treatment extends PanacheEntityBase {
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 
+    /** Excluído por ter sido cadastrado por engano: fica guardado, mas some de todas as telas. */
+    @Column(name = "deleted_at")
+    public Instant deletedAt;
+
+    @Column(name = "deleted_by")
+    public UUID deletedBy;
+
+    @Column(name = "delete_reason")
+    public String deleteReason;
+
     public static Optional<Treatment> findInFamily(UUID familyId, UUID treatmentId) {
-        return find("familyId = ?1 and id = ?2", familyId, treatmentId).firstResultOptional();
+        return find("familyId = ?1 and id = ?2 and deletedAt is null", familyId, treatmentId).firstResultOptional();
     }
 
     public static Optional<Treatment> lockInFamily(UUID familyId, UUID treatmentId) {
-        return find("familyId = ?1 and id = ?2", familyId, treatmentId)
+        return find("familyId = ?1 and id = ?2 and deletedAt is null", familyId, treatmentId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
     }

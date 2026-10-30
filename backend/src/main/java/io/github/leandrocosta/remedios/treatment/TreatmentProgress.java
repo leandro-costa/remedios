@@ -68,7 +68,7 @@ public class TreatmentProgress {
             counts.put((UUID) r[0], new Counts(n(r[1]), n(r[2]), n(r[3]), n(r[4]), n(r[5]), n(r[6]),
                     instant(r[7]), instant(r[8])));
         }
-        List<Treatment> list = Treatment.list("familyId", familyId);
+        List<Treatment> list = Treatment.list("familyId = ?1 and deletedAt is null", familyId);
         return list.stream().map(t -> progress(t, counts.getOrDefault(t.id,
                 new Counts(0, 0, 0, 0, 0, 0, null, null)), now)).toList();
     }

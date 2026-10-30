@@ -185,6 +185,8 @@ export function TreatmentDetailPage() {
         </section>
       )}
 
+      {family.myRole === "ADMIN" && !t.conflictId && <DeleteTreatment treatment={t} />}
+
       {revisions.data && revisions.data.length > 0 && (
         <section className="card">
           <h2>Versões</h2>
@@ -226,6 +228,65 @@ function Progress({ p }: { p: TreatmentProgressView }) {
       {p.notAdministered + p.unrecorded > 0 && (
         <p className="muted small">Doses não dadas não são repostas pelo app. Em caso de dúvida, fale com quem prescreveu.</p>
       )}
+    </section>
+  );
+}
+
+/**
+ * Exclusão de um tratamento cadastrado por engano (só administradores, em
+ * qualquer situação). Some das telas e contagens; fica guardado na auditoria.
+ */
+function DeleteTreatment({ treatment: t }: { treatment: TreatmentView }) {
+  const family = useFamily();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await mutate({
+        familyId: family.id, method: "POST", path: `/families/${family.id}/treatments/${t.id}/deletion`,
+        body: { baseVersion: t.version, reason: reason.trim() },
+        label: `Excluir tratamento: ${t.name}`,
+        entityId: t.id,
+        effects: [{ key: `treatments:${family.id}`, op: "remove", id: t.id }],
+      });
+      navigate("/tratamentos", { replace: true });
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="row">
+        <button className="btn" onClick={() => setOpen(true)}>Excluir (cadastrado por engano)</button>
+      </div>
+    );
+  }
+  return (
+    <section className="card stack" role="dialog" aria-label="Excluir tratamento">
+      <h2>Excluir tratamento</h2>
+      <p>
+        Use só para um tratamento cadastrado por engano. Ele e as doses registradas deixam de aparecer em Hoje, no
+        Histórico, nas listas e nas contagens. Nada é apagado: fica guardado na auditoria e na exportação da família.
+      </p>
+      <p className="muted small">Para um tratamento que terminou de verdade, use "Encerrar": o histórico continua visível.</p>
+      {error && <Notice tone="error">{error}</Notice>}
+      <label>
+        Motivo
+        <input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000}
+          placeholder="Ex.: cadastrado na pessoa errada" />
+      </label>
+      <div className="row">
+        <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void remove()}>Excluir tratamento</button>
+        <button className="btn" onClick={() => setOpen(false)}>Cancelar</button>
+      </div>
     </section>
   );
 }

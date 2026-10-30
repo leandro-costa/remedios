@@ -110,8 +110,8 @@ public class ReminderService {
 
     private List<Notifier.Delivery> plan(Instant now) {
         List<Object[]> rows = em.createQuery("""
-                select o, s from DoseOccurrence o, TreatmentSchedule s
-                 where s.id = o.scheduleId and o.status = :open
+                select o, s from DoseOccurrence o, TreatmentSchedule s, Treatment t
+                 where s.id = o.scheduleId and o.status = :open and t.id = o.treatmentId and t.deletedAt is null
                    and o.scheduledAt > :from and o.scheduledAt < :to
                 """, Object[].class)
                 .setParameter("open", DoseOccurrence.Status.SCHEDULED)

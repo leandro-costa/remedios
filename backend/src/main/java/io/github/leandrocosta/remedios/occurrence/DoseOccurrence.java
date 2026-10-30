@@ -76,16 +76,20 @@ public class DoseOccurrence extends PanacheEntityBase {
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 
+    /** Doses de tratamentos excluídos (cadastrados por engano) não aparecem em lugar nenhum. */
+    public static final String NOT_DELETED =
+            "treatmentId not in (select t.id from Treatment t where t.deletedAt is not null)";
+
     public boolean isOpen() {
         return status == Status.SCHEDULED || status == Status.PENDING;
     }
 
     public static Optional<DoseOccurrence> findInFamily(UUID familyId, UUID id) {
-        return find("familyId = ?1 and id = ?2", familyId, id).firstResultOptional();
+        return find("familyId = ?1 and id = ?2 and " + NOT_DELETED, familyId, id).firstResultOptional();
     }
 
     public static Optional<DoseOccurrence> lockInFamily(UUID familyId, UUID id) {
-        return find("familyId = ?1 and id = ?2", familyId, id)
+        return find("familyId = ?1 and id = ?2 and " + NOT_DELETED, familyId, id)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
     }
