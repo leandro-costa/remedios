@@ -121,6 +121,37 @@ attachment` e `Cache-Control: no-store`.
 `userId` associa o perfil a uma conta, que precisa participar da família. Cada
 conta se associa a no máximo um perfil por família.
 
+## Medicamentos
+
+Cadastro da família, reaproveitado entre tratamentos. O nome é o que a família
+usa (comercial ou genérico); cada medicamento tem as substâncias (princípios
+ativos) com a concentração do rótulo, a forma farmacêutica e o fabricante. O
+app guarda e mostra: não compara doses nem sugere troca.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/families/{f}/medications` | lista |
+| POST | `/api/families/{f}/medications` | `{id?, name, form?, manufacturer?, category?, notes?, substances: [{substance, concentration?}]}`; `201`. Substância repetida: `422 DUPLICATE_SUBSTANCE` |
+| GET | `/api/families/{f}/medications/{m}` | um medicamento |
+| PUT | `/api/families/{f}/medications/{m}` | altera (mesmos campos) |
+
+O tratamento aceita `medicationId` (da família; outro: `422 UNKNOWN_MEDICATION`).
+Sem ele, o tratamento fica ligado ao medicamento da família com o mesmo nome,
+criado se não existir; assim um aparelho que só manda o nome continua
+funcionando.
+
+### Catálogo da ANVISA
+
+`GET /api/catalog/medications` devolve `{version, importedAt, items}`, com
+`items` = `[nome, substâncias separadas por vírgula, fabricante, categoria]`,
+dos medicamentos com registro **ativo** nos dados abertos da ANVISA (sem
+repetição de nome + substâncias + fabricante). O aparelho guarda o catálogo e
+envia `If-None-Match` com a versão que tem; sem mudança, `304`. O servidor
+importa o arquivo (`REMEDIOS_ANVISA_URL`, padrão
+`https://dados.anvisa.gov.br/dados/DADOS_ABERTOS_MEDICAMENTOS.csv`; aceita
+`file:`) logo depois de subir, se ainda não houver catálogo, e de novo a cada
+30 dias. O arquivo não traz concentração nem forma: essas a pessoa informa.
+
 ## Tratamentos
 
 | Método | Rota | Descrição |

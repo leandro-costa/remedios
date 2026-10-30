@@ -7,6 +7,7 @@ import io.github.leandrocosta.remedios.common.ApiException;
 import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
+import io.github.leandrocosta.remedios.medication.MedicationService;
 import io.github.leandrocosta.remedios.person.Person;
 import io.github.leandrocosta.remedios.schedule.ScheduleRule;
 import io.github.leandrocosta.remedios.schedule.ScheduleService;
@@ -50,8 +51,15 @@ public class TreatmentService {
     static final Duration MAX_ACTIVATION_BACKDATE = Duration.ofDays(30);
     private static final String CONFLICT_REASON = "Alteração feita sem conexão sobre uma versão anterior do tratamento";
 
+    /** {@code medicationId}: medicamento da família; sem ele, vale o de mesmo nome (criado se faltar). */
     public record TreatmentData(String name, Treatment.Kind kind, String prescribedDose, String route,
-            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule, Integer doseCount) {
+            String instructions, Instant startAt, Instant endAt, ScheduleRule schedule, Integer doseCount,
+            UUID medicationId) {
+
+        public TreatmentData(String name, Treatment.Kind kind, String prescribedDose, String route,
+                String instructions, Instant startAt, Instant endAt, ScheduleRule schedule, Integer doseCount) {
+            this(name, kind, prescribedDose, route, instructions, startAt, endAt, schedule, doseCount, null);
+        }
     }
 
     public record Change(long baseVersion, Instant effectiveFrom, String reason) {
@@ -87,10 +95,13 @@ public class TreatmentService {
     private final ScheduleService schedules;
     private final OccurrenceService occurrences;
     private final DeviceService devices;
+    private final MedicationService medications;
     private final ObjectMapper json;
 
     public TreatmentService(CurrentUser currentUser, FamilyAccess access, AuditService audit,
-            ScheduleService schedules, OccurrenceService occurrences, DeviceService devices, ObjectMapper json) {
+            ScheduleService schedules, OccurrenceService occurrences, DeviceService devices,
+            MedicationService medications, ObjectMapper json) {
+        this.medications = medications;
         this.currentUser = currentUser;
         this.access = access;
         this.audit = audit;
@@ -608,6 +619,7 @@ public class TreatmentService {
         t.startAt = data.startAt();
         t.endAt = data.endAt();
         t.doseCount = data.doseCount();
+        t.medicationId = medications.forTreatment(t.familyId, data.medicationId(), t.name).id;
     }
 
     private static boolean sameContent(Map<String, Object> a, Map<String, Object> b) {
@@ -618,6 +630,7 @@ public class TreatmentService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("personId", t.personId.toString());
         m.put("name", t.name);
+        m.put("medicationId", t.medicationId == null ? null : t.medicationId.toString());
         m.put("kind", t.kind.name());
         m.put("prescribedDose", t.prescribedDose);
         m.put("route", t.route);

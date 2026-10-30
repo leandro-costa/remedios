@@ -37,6 +37,8 @@ jobs:
       FIREBASE_PROJECT_ID: remedios-local
       REMEDIOS_JWT_PUBLICKEY_LOCATION: /run/keys/test-public.pem
       VITE_AUTH_MODE: local
+      # Amostra do catálogo da ANVISA (sem baixar o arquivo completo no CI).
+      REMEDIOS_ANVISA_URL: file:/run/anvisa/amostra.csv
     steps:
       - uses: actions/checkout@v7
       - name: Chaves VAPID descartáveis para o teste
