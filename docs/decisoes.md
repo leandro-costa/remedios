@@ -219,6 +219,12 @@ São parâmetros operacionais, não orientação clínica.
   `SCHEDULED` até haver desfecho, sem job para trocar estados.
 - **Ativação retroativa limitada a 30 dias** (eram 24 h; veja "Doses
   anteriores à ativação"). Tratamentos ativos só mudam do presente em diante.
+- **Excluir tratamento cadastrado por engano** é ocultar, não apagar
+  (`treatment.deleted_at`, `deleted_by`, `delete_reason`, V11). Só
+  administradores, com motivo, em qualquer situação (inclusive encerrado). O
+  tratamento e suas doses somem de todas as telas, consultas e contagens; o
+  registro continua no banco, na auditoria e na exportação. Para um
+  tratamento que terminou de verdade, o caminho é "Encerrar".
 - **Uso "se necessário" (sob demanda)**: tratamento `AS_NEEDED`, sem agenda.
   Cada dose registrada vira uma ocorrência já administrada, sem versão de
   agenda (`schedule_id` nulo, chave `prn:<id>`), e aparece no histórico como
