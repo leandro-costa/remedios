@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, UserError } from "../api/client";
 
 export type PushState =
   | "unsupported"      // navegador sem Web Push
@@ -55,6 +55,38 @@ async function send(deviceId: string, subscription: PushSubscription) {
   });
 }
 
+function sameKey(a: ArrayBuffer | null | undefined, b: Uint8Array): boolean {
+  if (!a) return false;
+  const bytes = new Uint8Array(a);
+  return bytes.length === b.length && bytes.every((v, i) => v === b[i]);
+}
+
+/** Erro do navegador ao ativar, em português e com o que fazer. */
+export class PushError extends UserError {}
+
+async function subscribe(registration: ServiceWorkerRegistration, key: Uint8Array<ArrayBuffer>): Promise<PushSubscription> {
+  const existing = await registration.pushManager.getSubscription();
+  // Inscrição feita com outra chave (o servidor trocou as chaves VAPID): não recebe mais nada.
+  if (existing && sameKey(existing.options.applicationServerKey, key)) return existing;
+  await existing?.unsubscribe();
+  try {
+    return await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  } catch {
+    // Logo depois de dar a permissão, alguns navegadores recusam a primeira tentativa.
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      return await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : "";
+      throw new PushError(name === "NotAllowedError"
+        ? "O navegador não deixou ativar as notificações. Confira a permissão do site e tente de novo."
+        : "O serviço de notificações do navegador não respondeu. Tente de novo. Em janela anônima as " +
+          "notificações não funcionam; no Brave, ligue " +
+          "\"Usar os serviços do Google para mensagens push\" nas configurações de privacidade.");
+    }
+  }
+}
+
 /** Pede permissão, inscreve o navegador e registra a inscrição para este aparelho. */
 export async function enablePush(deviceId: string): Promise<PushState> {
   const config = await api<PushConfig>("/push/config");
@@ -62,14 +94,7 @@ export async function enablePush(deviceId: string): Promise<PushState> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
   const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: keyBytes(config.publicKey),
-    });
-  }
-  await send(deviceId, subscription);
+  await send(deviceId, await subscribe(registration, keyBytes(config.publicKey)));
   return "on";
 }
 
@@ -91,6 +116,30 @@ export async function syncPush(deviceId: string): Promise<void> {
   if (subscription) await send(deviceId, subscription).catch(() => {});
 }
 
-export async function testPush(): Promise<{ sent: number; failed: number }> {
-  return api("/me/push/test", { method: "POST" });
+export type TestOutcome = "arrived" | "sent" | "failed";
+
+/**
+ * Envia um aviso de teste só para este aparelho e espera o service worker
+ * contar que ele chegou. "sent": o serviço de push aceitou, mas o aviso não
+ * chegou a tempo.
+ */
+export async function testPush(deviceId: string, waitMs = 15_000): Promise<TestOutcome> {
+  if (Notification.permission !== "granted") throw new PushError("As notificações não estão permitidas para este site.");
+  const registration = await navigator.serviceWorker.ready;
+  const key = (await api<PushConfig>("/push/config")).publicKey;
+  // A inscrição pode ter mudado (chaves trocadas no servidor): reenvia antes de testar.
+  if (key) await send(deviceId, await subscribe(registration, keyBytes(key)));
+  let done: (arrived: boolean) => void = () => {};
+  const arrived = new Promise<boolean>((resolve) => { done = resolve; });
+  const listener = (e: MessageEvent) => { if (e.data?.type === "push-received" && e.data.tag === "test") done(true); };
+  navigator.serviceWorker.addEventListener("message", listener);
+  const timer = setTimeout(() => done(false), waitMs);
+  try {
+    const r = await api<{ sent: number; failed: number }>(`/me/push/test?deviceId=${deviceId}`, { method: "POST" });
+    if (r.sent === 0) return "failed";
+    return (await arrived) ? "arrived" : "sent";
+  } finally {
+    clearTimeout(timer);
+    navigator.serviceWorker.removeEventListener("message", listener);
+  }
 }

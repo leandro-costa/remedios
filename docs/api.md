@@ -128,6 +128,7 @@ conta se associa a no máximo um perfil por família.
 | GET | `/api/families/{f}/treatments?personId=&status=` | lista |
 | POST | `/api/families/{f}/treatments` | cria em `DRAFT`, versão 1 |
 | GET | `/api/families/{f}/treatments/{t}` | |
+| POST | `/api/families/{f}/treatments/{t}/deletion` | exclui um tratamento cadastrado por engano, em qualquer situação: `{baseVersion, reason}`; só administradores (`403`). Nada é apagado: some das listas, de Hoje, do histórico e das contagens (consultas dele e das doses dão `404`), cancela as doses em aberto e fecha conferências pendentes; fica na auditoria e na exportação. `204` |
 | PUT | `/api/families/{f}/treatments/{t}` | altera o conteúdo; exige `baseVersion` e `effectiveFrom`. Início alterado num tratamento ativo reavalia as doses: as em aberto antes do novo início são canceladas; se antecipado, as do período acrescentado (até 30 dias) são criadas, em aberto ou, com `pastDoses: "ADMINISTERED"` e `deviceId`, registradas nos horários previstos |
 | POST | `/api/families/{f}/treatments/{t}/status` | `{status, baseVersion, effectiveFrom?, reason?, pastDoses?, deviceId?}` |
 | GET | `/api/families/{f}/treatments/{t}/revisions` | todas as versões, com fotografia e autoria |
@@ -328,7 +329,7 @@ administração. `OPEN` devolve a dose ao estado em aberto.
 | GET | `/api/push/config` | `{enabled, publicKey}`: chave VAPID para o navegador se inscrever |
 | PUT | `/api/me/devices/{d}/push` | `{endpoint, p256dh, auth, timezone}`: inscrição deste aparelho (HTTPS); substitui a anterior |
 | DELETE | `/api/me/devices/{d}/push` | desativa as notificações do aparelho |
-| POST | `/api/me/push/test` | envia um aviso de teste: `{sent, failed}` |
+| POST | `/api/me/push/test?deviceId=` | envia um aviso de teste a todos os aparelhos do usuário, ou só a `deviceId`: `{sent, failed}` |
 | POST | `/api/families/{f}/occurrences/{o}/claim` | "estou cuidando desta dose" (20 min); `409 ALREADY_CLAIMED` se outra pessoa já está |
 | DELETE | `/api/families/{f}/occurrences/{o}/claim` | libera |
 | PUT | `/api/families/{f}/occurrences/{o}/snooze` | "lembrar daqui a pouco": `{remindAt}` (até 12 h; `422 SNOOZE_TOO_LONG`). Adia só os lembretes de quem pede; o horário da dose não muda. Com a dose já decidida ou a hora já passada (envio tardio da fila), nada muda |

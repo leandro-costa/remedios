@@ -17,6 +17,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Response;
 import java.time.DateTimeException;
 import java.time.Duration;
@@ -129,13 +130,17 @@ public class PushResource {
             this.currentUser = currentUser;
         }
 
-    /** Envia um aviso de teste para os aparelhos do usuário. */
+    /**
+     * Envia um aviso de teste para os aparelhos do usuário, ou só para
+     * {@code deviceId}: assim "enviado" quer dizer enviado a este aparelho.
+     */
     @POST
     @Path("/test")
-    public TestResult test() {
+    public TestResult test(@QueryParam("deviceId") UUID deviceId) {
         push.requireEnabled();
         UUID me = currentUser.id();
-        List<PushSubscription> subs = QuarkusTransaction.requiringNew().call(() -> PushSubscription.activeFor(List.of(me)));
+        List<PushSubscription> subs = QuarkusTransaction.requiringNew().call(() -> PushSubscription.activeFor(List.of(me))
+                .stream().filter(s -> deviceId == null || s.deviceId.equals(deviceId)).toList());
         if (subs.isEmpty()) {
             throw ApiException.unprocessable("NO_SUBSCRIPTION", "Ative as notificações neste aparelho primeiro.");
         }

@@ -441,7 +441,8 @@ public class OccurrenceService {
 
     public List<DoseOccurrence> openConflicts(UUID familyId) {
         access.requireMember(familyId);
-        return DoseOccurrence.list("familyId = ?1 and status = ?2 order by scheduledAt desc", familyId,
+        return DoseOccurrence.list("familyId = ?1 and status = ?2 and " + DoseOccurrence.NOT_DELETED
+                + " order by scheduledAt desc", familyId,
                 DoseOccurrence.Status.REVIEW_REQUIRED);
     }
 
@@ -707,7 +708,8 @@ public class OccurrenceService {
     private List<DoseOccurrence> query(UUID familyId, Instant from, Instant to, UUID personId, UUID treatmentId,
             UUID changedBy, List<DoseOccurrence.Status> statuses, String order, int limit) {
         StringBuilder q = new StringBuilder(
-                "from DoseOccurrence o where o.familyId = :family and o.scheduledAt >= :from and o.scheduledAt < :to");
+                "from DoseOccurrence o where o.familyId = :family and o.scheduledAt >= :from and o.scheduledAt < :to"
+                        + " and o.treatmentId not in (select t.id from Treatment t where t.deletedAt is not null)");
         Map<String, Object> params = new HashMap<>();
         params.put("family", familyId);
         params.put("from", from);

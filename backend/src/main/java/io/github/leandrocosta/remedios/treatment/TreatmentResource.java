@@ -126,6 +126,10 @@ public class TreatmentResource {
             Boolean preserveConflict) {
     }
 
+    /** Exclusão de um tratamento cadastrado por engano: versão vista e motivo obrigatório. */
+    public record Delete(@NotNull Long baseVersion, @NotBlank @Size(max = 1000) String reason) {
+    }
+
     /** Dose "se necessário": {@code id} gerado no aparelho; {@code recordedAt}, quando o responsável tocou. */
     public record AsNeededDose(UUID id, @NotNull UUID deviceId, Instant administeredAt, @Size(max = 1000) String notes,
             Instant recordedAt) {
@@ -168,6 +172,14 @@ public class TreatmentResource {
     }
 
     /** Registra uma dose de um tratamento "se necessário" (dada agora ou há pouco). */
+    @POST
+    @Path("/{treatmentId}/deletion")
+    public Response delete(@PathParam("familyId") UUID familyId, @PathParam("treatmentId") UUID treatmentId,
+            @Valid @NotNull Delete r) {
+        treatments.delete(familyId, treatmentId, r.baseVersion(), r.reason());
+        return Response.noContent().build();
+    }
+
     @POST
     @Path("/{treatmentId}/doses")
     public OccurrenceViews.OccurrenceView recordDose(@PathParam("familyId") UUID familyId,
