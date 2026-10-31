@@ -68,27 +68,44 @@ export function applyLocal<T>(key: string, base: T | undefined, items: OutboxIte
   return data as T | undefined;
 }
 
-function applyEffect(data: unknown, effect: Effect): unknown {
+/**
+ * Registro confirmado pelo servidor: os efeitos passam para a cópia guardada,
+ * sem a marca de pendente. Assim ele não some se a conexão cair antes de a
+ * tela buscar os dados de novo.
+ */
+export async function commitEffects(effects: Effect[]): Promise<void> {
+  if (effects.length === 0) return;
+  const entries = await db.cache.toArray();
+  for (const entry of entries) {
+    const mine = effects.filter((e) => matches(e, entry.key));
+    if (mine.length === 0) continue;
+    const value = mine.reduce((data, e) => applyEffect(data, e, false), entry.value);
+    await db.cache.put({ ...entry, value });
+  }
+}
+
+function applyEffect(data: unknown, effect: Effect, pending = true): unknown {
+  const mark = pending ? { _pending: true } : {};
   if (Array.isArray(data) || (data === undefined && effect.op === "upsert" && effect.list)) {
     const rows = (data ?? []) as Row[];
     switch (effect.op) {
       case "upsert": {
         const id = rowId(effect.value);
         const found = rows.some((r) => rowId(r) === id);
-        const value = { ...effect.value, _pending: true };
+        const value = { ...effect.value, ...mark };
         return found ? rows.map((r) => (rowId(r) === id ? { ...r, ...value } : r)) : [...rows, value];
       }
       case "merge":
-        return rows.map((r) => (rowId(r) === effect.id ? { ...r, ...effect.value, _pending: true } : r));
+        return rows.map((r) => (rowId(r) === effect.id ? { ...r, ...effect.value, ...mark } : r));
       case "remove":
         return rows.filter((r) => rowId(r) !== effect.id);
     }
   }
   switch (effect.op) {
     case "upsert":
-      return { ...((data as Row) ?? {}), ...effect.value, _pending: true };
+      return { ...((data as Row) ?? {}), ...effect.value, ...mark };
     case "merge":
-      return data === undefined ? undefined : { ...(data as Row), ...effect.value, _pending: true };
+      return data === undefined ? undefined : { ...(data as Row), ...effect.value, ...mark };
     case "remove":
       return data;
   }

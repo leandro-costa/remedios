@@ -5,6 +5,7 @@ test("dada no horário: um toque na tela Hoje, com confirmação, online e offli
   // Horários fixados no início: evita a virada de minuto durante o teste.
   const T_MINUS_90 = localTime(-90);
   const T_MINUS_30 = localTime(-30);
+  const T_PLUS_60 = localTime(60);
   const ana = await newUser(browser, `Ana H ${run}`);
   const p = ana.page;
   await p.getByLabel("Nome da família").fill(`Família H ${run}`);
@@ -22,6 +23,8 @@ test("dada no horário: um toque na tela Hoje, com confirmação, online e offli
   await p.getByLabel("Horário 1", { exact: true }).fill(T_MINUS_90);
   await p.getByRole("button", { name: "+ Adicionar horário" }).click();
   await p.getByLabel("Horário 2", { exact: true }).fill(T_MINUS_30);
+  await p.getByRole("button", { name: "+ Adicionar horário" }).click();
+  await p.getByLabel("Horário 3", { exact: true }).fill(T_PLUS_60);
   await p.getByRole("button", { name: "Conferir" }).click();
   await p.getByRole("button", { name: "Salvar" }).click();
   await activate(p);
@@ -55,6 +58,14 @@ test("dada no horário: um toque na tela Hoje, com confirmação, online e offli
   await expect(second).toContainText("Administrada");
   await expect(p.getByText("Sincronizado")).toBeVisible();
   await expect(p.getByRole("button", { name: /Dada no horário/ })).toHaveCount(0);
+
+  // Dose de daqui a 1 h, dada antes: só "Dada agora", com o horário real.
+  const third = p.getByRole("link", { name: new RegExp(T_PLUS_60) });
+  await p.locator(".next-dose").getByRole("button", { name: `Dada agora: Medicamento B de Gabriel, prevista para ${T_PLUS_60}` }).click();
+  const nowDialog = p.getByRole("dialog", { name: "Dada agora?" });
+  await expect(nowDialog).toContainText(`(prevista para ${T_PLUS_60})`);
+  await nowDialog.getByRole("button", { name: /Confirmar: dada às/ }).click();
+  await expect(third).toContainText("Administrada");
 
   await ana.context.close();
 });
