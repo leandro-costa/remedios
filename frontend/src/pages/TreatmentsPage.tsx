@@ -11,6 +11,8 @@ import { isPending } from "../db/cache";
 import { TREATMENT_STATUS } from "../lib/labels";
 import { describeSchedule } from "../lib/schedule";
 import { useFamily, useSession } from "../session";
+import { prescriptionStatus, prescriptionTitle, PRESCRIPTION_STATUS, usePrescriptions } from "../lib/prescriptions";
+import { formatDate } from "../lib/time";
 
 // Ativos primeiro e como padrão: encerrados e rascunhos ficam a um toque.
 const FILTERS: { value: TreatmentStatus | "ALL"; label: string }[] = [
@@ -30,6 +32,7 @@ export function TreatmentsPage() {
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
   const progress = useCached(`treatment-progress:${family.id}`, () =>
     api<TreatmentProgressView[]>(`/families/${family.id}/treatments/progress`));
+  const prescriptions = usePrescriptions();
   const progressOf = (id: string) => progress.data?.find((p) => p.treatmentId === id);
 
   const list = (treatments.data ?? []).filter((t) => filter === "ALL" || t.status === filter);
@@ -37,29 +40,26 @@ export function TreatmentsPage() {
     .map((p) => ({ person: p, items: list.filter((t) => t.personId === p.id) }))
     .filter((g) => g.items.length > 0);
 
-  return (
-    <div className="page">
-      <PageHeader title="Tratamentos" subtitle="Medicamentos e horários de cada pessoa"
-        action={<Link to="/tratamentos/novo" className="round-btn" aria-label="Novo tratamento" title="Novo tratamento"><Icon name="plus" /></Link>} />
-      <Link to="/medicamentos" className="link">Medicamentos cadastrados →</Link>
-      {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
-      <div className="chips" role="group" aria-label="Filtrar por situação">
-        {FILTERS.map((f) => (
-          <button key={f.value} className={`chip ${filter === f.value ? "chip-on" : ""}`} onClick={() => setFilter(f.value)}>{f.label}</button>
-        ))}
-      </div>
-      {treatments.loading && !treatments.data && <Spinner />}
-      {treatments.error && !treatments.data && <Notice tone="error">{treatments.error}</Notice>}
-      {treatments.data && groups.length === 0 && <p className="empty">Nenhum tratamento {filter === "ALL" ? "cadastrado" : "nesta situação"}.</p>}
-      {groups.map((g) => (
-        <section key={g.person.id}>
-          <h2 className="group-head">
-            <Avatar name={g.person.displayName} id={g.person.id} size={32} />
-            {g.person.userId && g.person.userId === me?.id ? "Você" : g.person.displayName}
-          </h2>
-          <ul className="cards">
-            {g.items.map((t) => (
-              <li key={t.id}>
+  /** Receitas da pessoa com os itens visíveis no filtro; receita de um item só, sem título, aparece como o item. */
+  const receitasOf = (items: TreatmentView[]) => {
+    const byId = new Map<string, TreatmentView[]>();
+    for (const t of items) {
+      const key = t.prescriptionId ?? t.id;
+      byId.set(key, [...(byId.get(key) ?? []), t]);
+    }
+    return [...byId.entries()].map(([id, visible]) => {
+      const prescription = prescriptions.data?.find((p) => p.id === id);
+      const all = (treatments.data ?? []).filter((t) => (t.prescriptionId ?? t.id) === id);
+      return {
+        id, prescription, items: visible, all,
+        title: prescriptionTitle(prescription, all),
+        status: prescriptionStatus(all),
+        grouped: Boolean(prescription?.title) || all.length > 1,
+      };
+    });
+  };
+
+  const itemCard = (t: TreatmentView) => (
                 <Link to={`/tratamentos/${t.id}`} className="item">
                   <span className="tile"><Icon name="pill" /></span>
                   <span className="item-main">
@@ -81,9 +81,47 @@ export function TreatmentsPage() {
                   </span>
                   <span className="item-chevron"><Icon name="chevron" /></span>
                 </Link>
-              </li>
-            ))}
-          </ul>
+  );
+
+  return (
+    <div className="page">
+      <PageHeader title="Tratamentos" subtitle="Receitas, medicamentos e horários de cada pessoa"
+        action={<Link to="/tratamentos/novo" className="round-btn" aria-label="Novo tratamento" title="Novo tratamento"><Icon name="plus" /></Link>} />
+      <Link to="/medicamentos" className="link">Medicamentos cadastrados →</Link>
+      {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
+      <div className="chips" role="group" aria-label="Filtrar por situação">
+        {FILTERS.map((f) => (
+          <button key={f.value} className={`chip ${filter === f.value ? "chip-on" : ""}`} onClick={() => setFilter(f.value)}>{f.label}</button>
+        ))}
+      </div>
+      {treatments.loading && !treatments.data && <Spinner />}
+      {treatments.error && !treatments.data && <Notice tone="error">{treatments.error}</Notice>}
+      {treatments.data && groups.length === 0 && <p className="empty">Nenhum tratamento {filter === "ALL" ? "cadastrado" : "nesta situação"}.</p>}
+      {groups.map((g) => (
+        <section key={g.person.id}>
+          <h2 className="group-head">
+            <Avatar name={g.person.displayName} id={g.person.id} size={32} />
+            {g.person.userId && g.person.userId === me?.id ? "Você" : g.person.displayName}
+          </h2>
+          {receitasOf(g.items).map((r) => r.grouped ? (
+            <section key={r.id} className="prescription-card" aria-label={`Receita: ${r.title}`}>
+              <Link to={`/receitas/${r.id}`} className="prescription-head">
+                <span className="item-main">
+                  <strong>{r.title}</strong>
+                  <span className="muted small">{[r.prescription?.prescriber, r.prescription?.prescribedOn && formatDate(r.prescription.prescribedOn + "T12:00:00")].filter(Boolean).join(" · ") || `${r.all.length} ${r.all.length === 1 ? "item" : "itens"}`}</span>
+                </span>
+                <span className={`badge badge-t-${r.status.toLowerCase()}`}>{PRESCRIPTION_STATUS[r.status]}</span>
+                <span className="item-chevron"><Icon name="chevron" /></span>
+              </Link>
+              <ul className="cards">
+                {r.items.map((t) => <li key={t.id}>{itemCard(t)}</li>)}
+              </ul>
+            </section>
+          ) : (
+            <ul key={r.id} className="cards">
+              {r.items.map((t) => <li key={t.id}>{itemCard(t)}</li>)}
+            </ul>
+          ))}
         </section>
       ))}
     </div>

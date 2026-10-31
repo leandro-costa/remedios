@@ -22,7 +22,7 @@ public class AuditEvent extends PanacheEntityBase {
     @Column(name = "family_id", nullable = false)
     public UUID familyId;
 
-    @Column(name = "actor_id", nullable = false)
+    @Column(name = "actor_id")
     public UUID actorId;
 
     @Column(name = "device_id")

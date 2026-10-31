@@ -8,7 +8,9 @@ import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
 import io.github.leandrocosta.remedios.medication.MedicationService;
+import io.github.leandrocosta.remedios.occurrence.DoseOccurrence;
 import io.github.leandrocosta.remedios.person.Person;
+import io.github.leandrocosta.remedios.prescription.Prescription;
 import io.github.leandrocosta.remedios.schedule.ScheduleRule;
 import io.github.leandrocosta.remedios.schedule.ScheduleService;
 import io.github.leandrocosta.remedios.schedule.TreatmentSchedule;
@@ -49,6 +51,8 @@ public class TreatmentService {
      * passado (tratamento já em andamento quando foi cadastrado).
      */
     static final Duration MAX_ACTIVATION_BACKDATE = Duration.ofDays(30);
+    /** Depois da última dose prevista, o item ainda fica ativo por este tempo (para registrá-la). */
+    static final Duration FINISH_GRACE = Duration.ofHours(6);
     private static final String CONFLICT_REASON = "Alteração feita sem conexão sobre uma versão anterior do tratamento";
 
     /** {@code medicationId}: medicamento da família; sem ele, vale o de mesmo nome (criado se faltar). */
@@ -140,6 +144,16 @@ public class TreatmentService {
 
     @Transactional
     public Treatment create(UUID familyId, UUID requestedId, UUID personId, TreatmentData data) {
+        return create(familyId, requestedId, personId, data, null);
+    }
+
+    /**
+     * Cadastra um item (tratamento) numa receita da pessoa. Sem
+     * {@code prescriptionId}, cria uma receita só para ele (aparelhos antigos
+     * e registros que estavam na fila offline continuam funcionando).
+     */
+    @Transactional
+    public Treatment create(UUID familyId, UUID requestedId, UUID personId, TreatmentData data, UUID prescriptionId) {
         access.requireMember(familyId);
         Person person = Person.findInFamily(familyId, personId)
                 .orElseThrow(() -> ApiException.unprocessable("PERSON_NOT_FOUND",
@@ -155,6 +169,7 @@ public class TreatmentService {
         t.id = ClientIds.choose(requestedId, id -> Treatment.findById(id) != null);
         t.familyId = familyId;
         t.personId = personId;
+        t.prescriptionId = prescriptionFor(familyId, personId, prescriptionId, now).id;
         apply(t, data);
         t.status = Treatment.Status.DRAFT;
         t.version = 1;
@@ -169,6 +184,97 @@ public class TreatmentService {
         audit.record(familyId, actor, TREATMENT, t.id, "TREATMENT_CREATED", null, snapshot, null);
         audit.publish(familyId, "TREATMENT_CREATED", TREATMENT, t.id, event(t));
         return t;
+    }
+
+    private Prescription prescriptionFor(UUID familyId, UUID personId, UUID prescriptionId, Instant now) {
+        if (prescriptionId != null) {
+            Prescription p = Prescription.findInFamily(familyId, prescriptionId)
+                    .orElseThrow(() -> ApiException.unprocessable("UNKNOWN_PRESCRIPTION",
+                            "Receita não encontrada nesta família."));
+            if (!p.personId.equals(personId)) {
+                throw ApiException.unprocessable("PRESCRIPTION_OTHER_PERSON",
+                        "A receita é de outra pessoa.");
+            }
+            return p;
+        }
+        Prescription p = new Prescription();
+        p.id = UUID.randomUUID();
+        p.familyId = familyId;
+        p.personId = personId;
+        p.createdBy = currentUser.id();
+        p.createdAt = now;
+        p.updatedAt = now;
+        p.persist();
+        return p;
+    }
+
+    // --- Fim do período previsto ---------------------------------------------
+
+    /** Itens ativos cujo período terminou: data de término passou ou o total de doses já passou. */
+    public List<UUID> finished(Instant now) {
+        return em().createQuery("""
+                select t.id from Treatment t
+                 where t.status = :active and t.deletedAt is null
+                   and ((t.endAt is not null and t.endAt <= :now)
+                     or (t.doseCount is not null and t.kind <> :asNeeded
+                         and (select count(o) from DoseOccurrence o
+                               where o.treatmentId = t.id and o.status <> :cancelled) >= t.doseCount
+                         and not exists (select 1 from DoseOccurrence o
+                               where o.treatmentId = t.id and o.status <> :cancelled and o.scheduledAt > :grace)))
+                """, UUID.class)
+                .setParameter("active", Treatment.Status.ACTIVE)
+                .setParameter("asNeeded", Treatment.Kind.AS_NEEDED)
+                .setParameter("cancelled", DoseOccurrence.Status.CANCELLED)
+                .setParameter("now", now)
+                // A última dose ainda pode ser registrada por algumas horas antes de o item encerrar.
+                .setParameter("grace", now.minus(FINISH_GRACE))
+                .getResultList();
+    }
+
+    /** Encerra o item se o período terminou (o próprio sistema, sem autor), e a receita, se for o caso. */
+    @Transactional
+    public boolean endIfFinished(UUID treatmentId, Instant now) {
+        Treatment t = Treatment.<Treatment>findByIdOptional(treatmentId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+                .orElse(null);
+        if (t == null || t.status != Treatment.Status.ACTIVE || t.deletedAt != null || !finished(now).contains(t.id)) {
+            return false;
+        }
+        endBySystem(t, "Término previsto", now);
+        endAsNeededIfCourseOver(t.prescriptionId, now);
+        return true;
+    }
+
+    /**
+     * Itens "se necessário" de uma receita acompanham os itens com horário:
+     * quando todos esses terminam, a receita termina e eles também (um item
+     * "em caso de dor" pode nunca ser usado e deixaria a receita aberta).
+     */
+    void endAsNeededIfCourseOver(UUID prescriptionId, Instant now) {
+        List<Treatment> items = Treatment.list("prescriptionId = ?1 and deletedAt is null", prescriptionId);
+        List<Treatment> scheduled = items.stream().filter(i -> i.kind != Treatment.Kind.AS_NEEDED).toList();
+        if (scheduled.isEmpty() || scheduled.stream().anyMatch(i -> i.status != Treatment.Status.ENDED)) {
+            return;
+        }
+        items.stream().filter(i -> i.kind == Treatment.Kind.AS_NEEDED && i.status != Treatment.Status.ENDED)
+                .forEach(i -> endBySystem(i, "Receita encerrada", now));
+    }
+
+    private void endBySystem(Treatment t, String reason, Instant now) {
+        Map<String, Object> before = snapshot(t);
+        long base = t.version;
+        t.status = Treatment.Status.ENDED;
+        int cancelled = schedules.stop(t, now, null, reason);
+        t.version = base + 1;
+        t.updatedAt = now;
+        Map<String, Object> after = snapshot(t);
+        saveRevision(t, base, after, now, reason, now, null);
+        Map<String, Object> details = new LinkedHashMap<>(after);
+        details.put("cancelledOccurrences", cancelled);
+        audit.record(t.familyId, null, TREATMENT, t.id, "TREATMENT_STATUS_CHANGED", before, details, reason);
+    }
+
+    private static jakarta.persistence.EntityManager em() {
+        return Treatment.getEntityManager();
     }
 
     @Transactional
@@ -251,6 +357,7 @@ public class TreatmentService {
         after.put("cancelledOccurrences", cancelled);
         audit.record(familyId, actor, TREATMENT, t.id, "TREATMENT_DELETED", before, after, why);
         audit.publish(familyId, "TREATMENT_DELETED", TREATMENT, t.id, event(t));
+        endAsNeededIfCourseOver(t.prescriptionId, now);
     }
 
     /** Alterações preservadas aguardando conferência, por tratamento. */
@@ -389,6 +496,9 @@ public class TreatmentService {
                     : "Tratamento encerrado");
         }
         Treatment result = commitVersion(t, before, change, "TREATMENT_STATUS_CHANGED");
+        if (target == Treatment.Status.ENDED && !asNeeded) {
+            endAsNeededIfCourseOver(t.prescriptionId, Instant.now());
+        }
         if (recordPast) {
             occurrences.recordPastAsAdministered(t.familyId, t.id, deviceId, Instant.now());
         }
@@ -579,6 +689,11 @@ public class TreatmentService {
 
     private void saveRevision(Treatment t, Long baseVersion, Map<String, Object> snapshot, Instant effectiveFrom,
             String reason, Instant now) {
+        saveRevision(t, baseVersion, snapshot, effectiveFrom, reason, now, currentUser.id());
+    }
+
+    private void saveRevision(Treatment t, Long baseVersion, Map<String, Object> snapshot, Instant effectiveFrom,
+            String reason, Instant now, UUID actor) {
         TreatmentRevision r = new TreatmentRevision();
         r.id = UUID.randomUUID();
         r.treatmentId = t.id;
@@ -587,7 +702,7 @@ public class TreatmentService {
         r.snapshot = snapshot;
         r.effectiveFrom = effectiveFrom;
         r.changeReason = reason;
-        r.createdBy = currentUser.id();
+        r.createdBy = actor;
         r.createdAt = now;
         r.persist();
     }

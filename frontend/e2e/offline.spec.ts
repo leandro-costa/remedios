@@ -44,8 +44,8 @@ test("cadastros offline aparecem na hora e sincronizam ao voltar a conexão", as
   await shot(p, "10-doses-anteriores");
   await p.getByRole("button", { name: "Confirmar" }).click();
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  // Pessoa, medicamento novo (cadastrado junto com o tratamento), tratamento e ativação.
-  await expect(p.locator(".queue-float")).toContainText("4 aguardando envio");
+  // Pessoa, medicamento e receita novos (cadastrados junto com o tratamento), tratamento e ativação.
+  await expect(p.locator(".queue-float")).toContainText("5 aguardando envio");
 
   // Conexão de volta: tudo é enviado na ordem, e a dose anterior aparece como dada
   await goOnline(ana.context, p);

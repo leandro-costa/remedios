@@ -152,6 +152,35 @@ importa o arquivo (`REMEDIOS_ANVISA_URL`, padrão
 `file:`) logo depois de subir, se ainda não houver catálogo, e de novo a cada
 30 dias. O arquivo não traz concentração nem forma: essas a pessoa informa.
 
+## Receitas
+
+A receita agrupa os tratamentos (itens) de uma pessoa, como numa receita do
+médico. Cada item é um tratamento, com medicamento, dose, agenda (ou "se
+necessário"), período e situação próprios. A **situação da receita vem dos
+itens**: ativa se algum item está ativo; senão suspensa se algum está
+suspenso; senão rascunho se algum não foi ativado (ou não há itens); senão
+encerrada.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/families/{f}/prescriptions?personId=` | receitas, com `status` e `items` |
+| POST | `/api/families/{f}/prescriptions` | `{id?, personId, title?, prescriber?, prescribedOn?, notes?}`; `201` |
+| GET/PUT | `/api/families/{f}/prescriptions/{p}` | uma receita / altera os dados |
+| POST | `/api/families/{f}/prescriptions/{p}/status` | `{status: SUSPENDED\|ACTIVE\|ENDED, reason?}`: suspende os itens ativos, reativa os suspensos ou encerra todos (rascunhos são descartados) |
+| POST | `/api/families/{f}/prescriptions/{p}/deletion` | `{reason}`: exclui (oculta) a receita e os itens; só administradores |
+
+O tratamento recebe `prescriptionId` no cadastro (da mesma pessoa; outra:
+`422 PRESCRIPTION_OTHER_PERSON`). Sem ele, o servidor cria uma receita só
+para o item.
+
+**Fim da receita.** Um item com término (data ou número de doses) é encerrado
+pelo sistema ao fim do período (no número de doses, 6 h depois da última
+prevista, para dar tempo de registrá-la). Quando o último item com horário de
+uma receita termina (sozinho ou à mão), os itens "se necessário" dela terminam
+junto: um "em caso de dor" pode nunca ser usado e deixaria a receita aberta.
+Receita só com itens "se necessário" vale até o término informado ou até ser
+encerrada.
+
 ## Tratamentos
 
 | Método | Rota | Descrição |

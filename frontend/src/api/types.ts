@@ -123,6 +123,23 @@ export interface TreatmentView {
   conflictId: string | null;
   /** Medicamento da família (reaproveitável entre tratamentos). */
   medicationId?: string | null;
+  /** Receita a que este item pertence. */
+  prescriptionId?: string | null;
+}
+
+/** Receita: agrupa os tratamentos (itens) de uma pessoa. A situação vem dos itens. */
+export interface PrescriptionView {
+  id: string;
+  personId: string;
+  title: string | null;
+  prescriber: string | null;
+  /** Data da receita (AAAA-MM-DD). */
+  prescribedOn: string | null;
+  notes: string | null;
+  status: TreatmentStatus;
+  items: { id: string; name: string; medicationId: string | null; kind: TreatmentKind; status: TreatmentStatus; prescribedDose: string }[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Substância (princípio ativo) e concentração, como no rótulo. */

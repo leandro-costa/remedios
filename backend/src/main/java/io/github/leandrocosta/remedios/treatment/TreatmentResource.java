@@ -35,12 +35,12 @@ public class TreatmentResource {
     public record TreatmentView(UUID id, UUID personId, String name, Treatment.Kind kind, String prescribedDose,
             String route, String instructions, Treatment.Status status, Instant startAt, Instant endAt,
             Integer doseCount, Map<String, Object> schedule, long version, UUID createdBy, Instant createdAt, UUID updatedBy,
-            Instant updatedAt, UUID conflictId, UUID medicationId) {
+            Instant updatedAt, UUID conflictId, UUID medicationId, UUID prescriptionId) {
 
         static TreatmentView of(Treatment t, UUID conflictId) {
             return new TreatmentView(t.id, t.personId, t.name, t.kind, t.prescribedDose, t.route, t.instructions,
                     t.status, t.startAt, t.endAt, t.doseCount, t.scheduleRule, t.version, t.createdBy, t.createdAt, t.updatedBy,
-                    t.updatedAt, conflictId, t.medicationId);
+                    t.updatedAt, conflictId, t.medicationId, t.prescriptionId);
         }
 
         static TreatmentView of(Treatment t) {
@@ -76,6 +76,8 @@ public class TreatmentResource {
     public record CreateTreatment(
             /** Id gerado no aparelho (opcional). */
             UUID id,
+            /** Receita a que o item pertence; sem ela, uma receita nova só para ele. */
+            UUID prescriptionId,
             @NotNull UUID personId,
             @NotBlank @Size(max = 200) String name,
             @NotNull Treatment.Kind kind,
@@ -170,7 +172,8 @@ public class TreatmentResource {
 
     @POST
     public Response create(@PathParam("familyId") UUID familyId, @Valid @NotNull CreateTreatment request) {
-        Treatment t = treatments.create(familyId, request.id(), request.personId(), request.toData());
+        Treatment t = treatments.create(familyId, request.id(), request.personId(), request.toData(),
+                request.prescriptionId());
         return Response.status(Response.Status.CREATED).entity(TreatmentView.of(t)).build();
     }
 

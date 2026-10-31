@@ -39,9 +39,9 @@ class SchemaConstraintsTest {
 
         assertThrows(PersistenceException.class, () -> sql("""
                 INSERT INTO treatment (id, family_id, person_id, name, kind, prescribed_dose, status, start_at,
-                                       version, created_by, updated_by)
-                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'DRAFT', now(), 1, '%s', '%s')
-                """, UUID.randomUUID(), familyB, person, ana.id(), ana.id()));
+                                       version, created_by, updated_by, prescription_id)
+                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'DRAFT', now(), 1, '%s', '%s', '%s')
+                """, UUID.randomUUID(), familyB, person, ana.id(), ana.id(), prescription(familyA, person, ana.id())));
     }
 
     @Test
@@ -57,9 +57,9 @@ class SchemaConstraintsTest {
         sql("INSERT INTO person (id, family_id, display_name) VALUES ('%s', '%s', 'Gabriel')", person, family);
         sql("""
                 INSERT INTO treatment (id, family_id, person_id, name, kind, prescribed_dose, status, start_at,
-                                       version, created_by, updated_by)
-                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s')
-                """, treatment, family, person, user, user);
+                                       version, created_by, updated_by, prescription_id)
+                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s', '%s')
+                """, treatment, family, person, user, user, prescription(family, person, user));
         sql("""
                 INSERT INTO treatment_schedule (id, treatment_id, rule, timezone, reminder_before_minutes,
                     repeat_interval_minutes, repeat_limit, late_tolerance_minutes, version, valid_from)
@@ -103,9 +103,9 @@ class SchemaConstraintsTest {
         sql("INSERT INTO person (id, family_id, display_name) VALUES ('%s', '%s', 'Gabriel')", person, family);
         sql("""
                 INSERT INTO treatment (id, family_id, person_id, name, kind, prescribed_dose, status, start_at,
-                                       version, created_by, updated_by)
-                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s')
-                """, treatment, family, person, user, user);
+                                       version, created_by, updated_by, prescription_id)
+                VALUES ('%s', '%s', '%s', 'X', 'CONTINUOUS', '1', 'ACTIVE', now(), 1, '%s', '%s', '%s')
+                """, treatment, family, person, user, user, prescription(family, person, user));
         String scheduleSql = """
                 INSERT INTO treatment_schedule (id, treatment_id, rule, timezone, reminder_before_minutes,
                     repeat_interval_minutes, repeat_limit, late_tolerance_minutes, version, valid_from)
@@ -119,5 +119,15 @@ class SchemaConstraintsTest {
         QuarkusTransaction.requiringNew().run(() -> Panache.getEntityManager()
                 .createNativeQuery(template.formatted(args))
                 .executeUpdate());
+    }
+
+    /** Receita para os itens inseridos direto no banco. */
+    private UUID prescription(UUID family, UUID person, UUID user) {
+        UUID id = UUID.randomUUID();
+        sql("""
+                INSERT INTO prescription (id, family_id, person_id, created_by, created_at, updated_at)
+                VALUES ('%s', '%s', '%s', '%s', now(), now())
+                """, id, family, person, user);
+        return id;
     }
 }

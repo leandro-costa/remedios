@@ -58,6 +58,10 @@ public class Treatment extends PanacheEntityBase {
     @Column(name = "medication_id")
     public UUID medicationId;
 
+    /** Receita a que este item pertence. */
+    @Column(name = "prescription_id", nullable = false)
+    public UUID prescriptionId;
+
     @Column(nullable = false)
     public String name;
 
