@@ -7,6 +7,9 @@ import { HealthPage } from "./pages/HealthPage";
 import { MeasurementDetailPage, SymptomDetailPage } from "./pages/HealthDetailPages";
 import { HistoryPage } from "./pages/HistoryPage";
 import { MeasurementFormPage } from "./pages/MeasurementFormPage";
+import { MedicationDetailPage } from "./pages/MedicationDetailPage";
+import { MedicationFormPage } from "./pages/MedicationFormPage";
+import { MedicationsPage } from "./pages/MedicationsPage";
 import { SymptomFormPage } from "./pages/SymptomFormPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
@@ -42,6 +45,10 @@ export function App() {
             <Route path="tratamentos/novo" element={<TreatmentFormPage />} />
             <Route path="tratamentos/:id" element={<TreatmentDetailPage />} />
             <Route path="tratamentos/:id/editar" element={<TreatmentFormPage />} />
+            <Route path="medicamentos" element={<MedicationsPage />} />
+            <Route path="medicamentos/novo" element={<MedicationFormPage />} />
+            <Route path="medicamentos/:id" element={<MedicationDetailPage />} />
+            <Route path="medicamentos/:id/editar" element={<MedicationFormPage />} />
             <Route path="historico" element={<HistoryPage />} />
             <Route path="saude" element={<HealthPage />} />
             <Route path="saude/aferir" element={<MeasurementFormPage />} />

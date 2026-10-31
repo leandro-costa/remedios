@@ -73,15 +73,24 @@ public class OccurrenceService {
     public List<DoseOccurrence> agenda(UUID familyId, Instant from, Instant to, UUID personId, UUID treatmentId) {
         access.requireMember(familyId);
         requireRange(from, to);
-        return query(familyId, from, to, personId, treatmentId, null, null, "o.scheduledAt, o.slotKey", 0);
+        return query(familyId, from, to, personId, treatmentId, null, null, null, "o.scheduledAt, o.slotKey", 0);
     }
 
     /** Histórico (seção 7.4): doses com desfecho registrado, mais recentes primeiro. */
     public List<DoseOccurrence> history(UUID familyId, Instant from, Instant to, UUID personId, UUID treatmentId,
             UUID recordedBy, int limit) {
+        return history(familyId, from, to, personId, treatmentId, null, recordedBy, limit);
+    }
+
+    /**
+     * Histórico; com {@code medicationId}, consolidado por medicamento: as
+     * doses dele em todos os tratamentos (receita ou uso eventual).
+     */
+    public List<DoseOccurrence> history(UUID familyId, Instant from, Instant to, UUID personId, UUID treatmentId,
+            UUID medicationId, UUID recordedBy, int limit) {
         access.requireMember(familyId);
         requireRange(from, to);
-        return query(familyId, from, to, personId, treatmentId, recordedBy,
+        return query(familyId, from, to, personId, treatmentId, medicationId, recordedBy,
                 List.of(DoseOccurrence.Status.ADMINISTERED, DoseOccurrence.Status.NOT_ADMINISTERED,
                         DoseOccurrence.Status.REVIEW_REQUIRED),
                 "o.scheduledAt desc, o.slotKey desc", Math.clamp(limit, 1, MAX_HISTORY));
@@ -706,7 +715,7 @@ public class OccurrenceService {
     }
 
     private List<DoseOccurrence> query(UUID familyId, Instant from, Instant to, UUID personId, UUID treatmentId,
-            UUID changedBy, List<DoseOccurrence.Status> statuses, String order, int limit) {
+            UUID medicationId, UUID changedBy, List<DoseOccurrence.Status> statuses, String order, int limit) {
         StringBuilder q = new StringBuilder(
                 "from DoseOccurrence o where o.familyId = :family and o.scheduledAt >= :from and o.scheduledAt < :to"
                         + " and o.treatmentId not in (select t.id from Treatment t where t.deletedAt is not null)");
@@ -717,6 +726,10 @@ public class OccurrenceService {
         if (personId != null) {
             q.append(" and o.treatmentId in (select t.id from Treatment t where t.personId = :person)");
             params.put("person", personId);
+        }
+        if (medicationId != null) {
+            q.append(" and o.treatmentId in (select t.id from Treatment t where t.medicationId = :medication)");
+            params.put("medication", medicationId);
         }
         if (treatmentId != null) {
             q.append(" and o.treatmentId = :treatment");

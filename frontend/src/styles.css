@@ -441,3 +441,11 @@ h2.eyebrow { margin: 0; }
 .tally > div { background: var(--bg); border-radius: 14px; padding: 0.6rem 0.4rem; text-align: center; }
 .tally dt { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
 .tally dd { margin: 0; font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Sugestões ao digitar (medicamentos e substâncias). */
+.suggestions { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); }
+.suggestion {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-height: 48px; padding: 0.5rem 0.75rem;
+  background: none; border: 0; border-radius: 10px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.suggestion:hover, .suggestion:focus-visible { background: var(--primary-soft); }

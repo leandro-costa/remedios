@@ -28,7 +28,7 @@ test("se necessário: sem horários, registra cada dose, mostra a última e as d
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
   // Hoje: cartão do remédio, fora da lista de doses previstas.
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
   const card = p.getByRole("region", { name: "Se necessário: Paracetamol" });
   await expect(card).toContainText("Na receita: Se febre acima de 37,8 °C");
   await expect(card.getByTestId("as-needed-last")).toHaveText("Nenhuma dose registrada.");
@@ -63,7 +63,7 @@ test("se necessário: sem horários, registra cada dose, mostra a última e as d
   await p.getByRole("radio", { name: /Registrada por engano/ }).check();
   await p.getByLabel("Motivo da correção").fill("Toque duplo");
   await p.getByRole("button", { name: "Salvar correção" }).click();
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
   await expect(p.getByRole("region", { name: "Se necessário: Paracetamol" }).getByTestId("as-needed-count"))
     .toHaveText("1 dose nas últimas 24 h");
   await ana.context.close();
