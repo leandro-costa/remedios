@@ -9,6 +9,9 @@
 - **App:** PWA em `frontend/` (React + Vite + TypeScript), com dependências npm
   fixadas em versões exatas (`save-exact`). Toda tela deve funcionar com a
   cópia offline e nunca indicar "sincronizado" com registros pendentes.
+  Toda leitura passa por `useCached` com chave estável (nunca o horário exato
+  da consulta) e entra no pré-carregamento (`frontend/src/sync/prefetch.ts`),
+  com a mesma chave da tela (`frontend/src/lib/queries.ts`).
 - **Offline em tudo:** toda gravação é feita primeiro no aparelho (fila em
   `frontend/src/sync/outbox.ts`, `mutate`), aparece na hora com "Aguardando
   envio" e sincroniza quando houver conexão. Na API, toda gravação aceita

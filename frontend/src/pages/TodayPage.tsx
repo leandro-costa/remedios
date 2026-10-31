@@ -12,6 +12,7 @@ import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
+import { queries } from "../lib/queries";
 import { undecided } from "../lib/eventual";
 import { hiddenEventual, isEventual, prescriptionTitle, usePrescriptions } from "../lib/prescriptions";
 import { useOutbox } from "../hooks/useOutbox";
@@ -54,13 +55,8 @@ export function TodayPage() {
   };
   const [onTime, setOnTime] = useState<{ occurrence: OccurrenceView; now: boolean } | null>(null);
 
-  // Busca de um dia antes a três depois: a cópia offline cobre os próximos dias.
-  const from = addDays(day, -1);
-  const to = addDays(day, 3);
-  const agenda = useCached(`agenda:${family.id}:${day.toISOString()}`, () =>
-    api<OccurrenceView[]>(`/families/${family.id}/occurrences`, {
-      query: { from: from.toISOString(), to: to.toISOString() },
-    }));
+  const agendaQuery = queries.agenda(family.id, day);
+  const agenda = useCached(agendaQuery.key, agendaQuery.fetch);
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
   const treatmentConflicts = useCached(`treatment-conflicts:${family.id}`, () =>
     api<TreatmentConflictView[]>(`/families/${family.id}/treatments/conflicts`));

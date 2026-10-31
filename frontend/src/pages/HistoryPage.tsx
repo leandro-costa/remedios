@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
-import type { MemberView, OccurrenceView, PersonView } from "../api/types";
+import type { MemberView, PersonView } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
-import { addDays, formatTime, formatWhen, startOfDay } from "../lib/time";
+import { queries } from "../lib/queries";
+import { formatTime, formatWhen } from "../lib/time";
 import { useFamily } from "../session";
 import { useMedications } from "./MedicationsPage";
 import { doseLabel } from "../lib/labels";
@@ -29,14 +30,10 @@ export function HistoryPage() {
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
   const medications = useMedications();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
-  const to = addDays(startOfDay(new Date()), 1);
-  const from = addDays(to, -days);
-  const key = `history:${family.id}:${days}:${personId}:${medicationId}:${recordedBy}`;
   // Por medicamento, não por tratamento: as doses do mesmo medicamento em
   // receitas diferentes (ou no uso eventual) aparecem juntas.
-  const history = useCached(key, () => api<OccurrenceView[]>(`/families/${family.id}/history`, {
-    query: { from: from.toISOString(), to: to.toISOString(), personId, medicationId, recordedBy, limit: 300 },
-  }));
+  const query = queries.history(family.id, days, personId, medicationId, recordedBy);
+  const history = useCached(query.key, query.fetch);
 
   return (
     <div className="page">

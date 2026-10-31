@@ -53,7 +53,7 @@ test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ br
   // Abrir uma dose e voltar mantém a visão (semana) e o filtro por pessoa.
   await p.getByRole("button", { name: "Gabriel", exact: true }).click();
   await p.locator(".week-day.is-today").getByRole("link", { name: /Vitamina D/ }).click();
-  await expect(p.getByRole("heading", { name: "Dose" })).toBeVisible();
+  await expect(p.getByRole("heading", { name: "Dose", exact: true })).toBeVisible();
   await p.goBack();
   await expect(p.getByRole("heading", { name: "Semana" })).toBeVisible();
   await expect(p.getByRole("radio", { name: "Semana" })).toHaveAttribute("aria-checked", "true");

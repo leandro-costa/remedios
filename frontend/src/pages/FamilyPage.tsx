@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type {
-  DeviceView, FamilySettings, InvitationView, IssuedInvitation, MemberView, NotificationSettings, OccurrenceView, PersonView, Role,
+  DeviceView, FamilySettings, InvitationView, IssuedInvitation, MemberView, NotificationSettings, PersonView, Role,
 } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
@@ -10,9 +10,10 @@ import { Notice } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
 import { ProgressRing } from "../components/ProgressRing";
 import { useCached } from "../hooks/useCached";
+import { queries } from "../lib/queries";
 import { useOnline } from "../hooks/useOnline";
 import { ROLE } from "../lib/labels";
-import { addDays, formatDate, formatTime, formatWhen, sameDay, startOfDay } from "../lib/time";
+import { formatDate, formatTime, formatWhen, sameDay, startOfDay } from "../lib/time";
 import { disablePush, enablePush, pushState, testPush, type PushState, type TestOutcome } from "../sync/push";
 import { isPending } from "../db/cache";
 import { mutate } from "../sync/outbox";
@@ -85,13 +86,15 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
   const session = useSession();
   const online = useOnline();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
-  const [invites, setInvites] = useState<InvitationView[]>([]);
+  // Convites pendentes: guardados no aparelho como o resto (criar e revogar exigem conexão).
+  const invitations = useCached(isAdmin ? `invitations:${family.id}` : null, () => api<InvitationView[]>(`/families/${family.id}/invitations`));
+  const [hiddenInvites, setHiddenInvites] = useState<string[]>([]);
+  const invites = (invitations.data ?? []).filter((i) => !hiddenInvites.includes(i.id));
   const [issued, setIssued] = useState<IssuedInvitation | null>(null);
   const [role, setRole] = useState<Role>("MEMBER");
   const { busy, error, run } = useAction();
 
-  const loadInvites = () => isAdmin && api<InvitationView[]>(`/families/${family.id}/invitations`).then(setInvites).catch(() => {});
-  useEffect(() => { void loadInvites(); }, [family.id, isAdmin]);
+  const loadInvites = () => invitations.reload();
 
   const link = issued ? `${location.origin}/entrar-na-familia?codigo=${encodeURIComponent(issued.code)}` : "";
   async function share() {
@@ -167,7 +170,7 @@ function Members({ isAdmin }: { isAdmin: boolean }) {
                   <span>Convite pendente ({ROLE[i.role]}) · até {formatDate(i.expiresAt)}</span>
                   <button className="btn btn-small" onClick={() => void run(async () => {
                     await mutate({ familyId: family.id, method: "DELETE", path: `/families/${family.id}/invitations/${i.id}`, label: "Revogar convite" });
-                    setInvites((list) => list.filter((x) => x.id !== i.id));
+                    setHiddenInvites((list) => [...list, i.id]);
                     await loadInvites();
                   })}>Revogar</button>
                 </li>
@@ -222,10 +225,8 @@ function Persons() {
   });
 
   const today = startOfDay(new Date());
-  const agenda = useCached(`agenda:${family.id}:${today.toISOString()}`, () =>
-    api<OccurrenceView[]>(`/families/${family.id}/occurrences`, {
-      query: { from: addDays(today, -1).toISOString(), to: addDays(today, 3).toISOString() },
-    }));
+  const agendaQuery = queries.agenda(family.id, today);
+  const agenda = useCached(agendaQuery.key, agendaQuery.fetch);
   const todays = (agenda.data ?? []).filter((o) => sameDay(new Date(o.scheduledAt), today) && o.status !== "CANCELLED");
   const summary = (personId: string) => {
     const doses = todays.filter((o) => o.person.id === personId);
