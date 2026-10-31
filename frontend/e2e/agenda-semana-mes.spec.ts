@@ -50,6 +50,15 @@ test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ br
   await expect(p.locator(".week-day.is-today .week-head")).toContainText("1 de 1 dadas");
   await expect(p.locator(".week-day.is-today")).toContainText("Vitamina D");
 
+  // Abrir uma dose e voltar mantém a visão (semana) e o filtro por pessoa.
+  await p.getByRole("button", { name: "Gabriel", exact: true }).click();
+  await p.locator(".week-day.is-today").getByRole("link", { name: /Vitamina D/ }).click();
+  await expect(p.getByRole("heading", { name: "Dose" })).toBeVisible();
+  await p.goBack();
+  await expect(p.getByRole("heading", { name: "Semana" })).toBeVisible();
+  await expect(p.getByRole("radio", { name: "Semana" })).toHaveAttribute("aria-checked", "true");
+  await expect(p.getByRole("button", { name: "Gabriel", exact: true })).toHaveClass(/chip-on/);
+
   // Mês: calendário; tocar no dia de hoje abre o dia.
   await p.getByRole("radio", { name: "Mês" }).click();
   const today = p.locator(".month-day.is-today");
