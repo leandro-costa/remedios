@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type TouchEvent } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView, TreatmentView } from "../api/types";
+import { AgendaRange, move, startOfMonth, startOfWeek, type AgendaView } from "../components/AgendaRange";
 import { AsNeededCard } from "../components/AsNeeded";
 import { Notice, Spinner } from "../components/Layout";
 import { Avatar } from "../components/Avatar";
@@ -20,6 +21,22 @@ export function TodayPage() {
   const family = useFamily();
   const { me } = useSession();
   const [day, setDay] = useState(() => startOfDay(new Date()));
+  const [view, setView] = useState<AgendaView>("day");
+  // Arrastar para o lado muda de dia (ou de semana, ou de mês).
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    // Faixas que rolam para o lado (filtros) não mudam o dia.
+    touch.current = (e.target as HTMLElement).closest(".chips, .month, input, dialog") ? null
+      : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const start = touch.current;
+    touch.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setDay(move(day, view, dx < 0 ? 1 : -1));
+  };
   const [personId, setPersonId] = useState<string | null>(null);
   const [onTime, setOnTime] = useState<{ occurrence: OccurrenceView; now: boolean } | null>(null);
 
@@ -63,14 +80,25 @@ export function TodayPage() {
     `Dada no horário: ${o.treatment.name} de ${who(o)} às ${formatTime(o.scheduledAt)}`;
   const next = isToday ? doses.filter(open).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] : undefined;
 
-  const dayTitle = isToday ? "Hoje"
-    : sameDay(day, addDays(startOfDay(new Date()), -1)) ? "Ontem"
-    : sameDay(day, addDays(startOfDay(new Date()), 1)) ? "Amanhã" : formatDay(day);
+  const now = new Date();
+  // Na visão atual, o dia/semana/mês de hoje está na tela?
+  const showingNow = view === "day" ? isToday
+    : view === "week" ? sameDay(startOfWeek(day), startOfWeek(now))
+    : sameDay(startOfMonth(day), startOfMonth(now));
+  const dayTitle = view === "week" ? "Semana"
+    : view === "month" ? capitalize(day.toLocaleDateString("pt-BR", { month: "long" }))
+    : isToday ? "Hoje"
+    : sameDay(day, addDays(startOfDay(now), -1)) ? "Ontem"
+    : sameDay(day, addDays(startOfDay(now), 1)) ? "Amanhã" : formatDay(day);
+  const subtitle = view === "week"
+    ? `${shortDate(startOfWeek(day))} – ${shortDate(addDays(startOfWeek(day), 6))}`
+    : view === "month" ? String(day.getFullYear()) : formatLongDay(day);
+  const unit = view === "day" ? ["Dia anterior", "Próximo dia"] : view === "week" ? ["Semana anterior", "Próxima semana"] : ["Mês anterior", "Próximo mês"];
   const firstName = (me?.displayName ?? "").split(" ")[0];
 
   return (
-    <div className="page page-today">
-      <section className={`hero ${next ? "hero-with-card" : ""}`}>
+    <div className="page page-today" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <section className={`hero ${next && view === "day" ? "hero-with-card" : ""}`}>
         <div className="hero-hello">
           {me && <Avatar name={me.displayName} id={me.id} size={44} />}
           <span className="hero-hello-text">
@@ -85,17 +113,27 @@ export function TodayPage() {
           <div className="hero-day">
             <h1>{dayTitle}</h1>
             <div className="day-nav">
-              <button className="icon-btn" aria-label="Dia anterior" onClick={() => setDay(addDays(day, -1))}>‹</button>
-              <span className="hero-muted">{formatLongDay(day)}</span>
-              <button className="icon-btn" aria-label="Próximo dia" onClick={() => setDay(addDays(day, 1))}>›</button>
+              <button className="icon-btn" aria-label={unit[0]} onClick={() => setDay(move(day, view, -1))}>‹</button>
+              <span className="hero-muted">{subtitle}</span>
+              <button className="icon-btn" aria-label={unit[1]} onClick={() => setDay(move(day, view, 1))}>›</button>
             </div>
             <SyncStatus familyId={family.id} fresh={agenda.fresh} savedAt={agenda.savedAt} />
-            {!isToday && <button className="link" onClick={() => setDay(startOfDay(new Date()))}>Voltar para hoje</button>}
+            {!showingNow && (
+              <button className="today-chip" aria-label="Voltar para hoje" onClick={() => setDay(startOfDay(new Date()))}>
+                <Icon name="back" />Hoje
+              </button>
+            )}
           </div>
-          {counted.length > 0 && <ProgressRing done={given} total={counted.length} />}
+          {view === "day" && counted.length > 0 && <ProgressRing done={given} total={counted.length} />}
+        </div>
+        <div className="segmented view-switch" role="radiogroup" aria-label="Visão">
+          {(["day", "week", "month"] as const).map((v) => (
+            <button key={v} type="button" role="radio" aria-checked={view === v} className={view === v ? "on" : ""}
+              onClick={() => setView(v)}>{v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}</button>
+          ))}
         </div>
       </section>
-      {next && (
+      {next && view === "day" && (
         <div className="next-dose">
           <div className="row between">
             <span className="eyebrow">Próxima dose</span>
@@ -153,6 +191,12 @@ export function TodayPage() {
         ))}
       </div>
 
+      {view !== "day" && (
+        <AgendaRange view={view} day={day} personId={personId} queued={new Set(queued.keys())} who={who}
+          onOpenDay={(d) => { setDay(startOfDay(d)); setView("day"); }} />
+      )}
+      {view === "day" && (
+        <>
       {agenda.error && !agenda.data && <Notice tone="error">{agenda.error}</Notice>}
       {agenda.loading && !agenda.data && <Spinner />}
       {agenda.data && doses.length === 0 && (
@@ -205,7 +249,18 @@ export function TodayPage() {
           {asNeeded.map((t) => <AsNeededCard key={t.id} treatment={t} personName={personName(t.personId)} compact />)}
         </section>
       )}
+        </>
+      )}
       {onTime && <OnTimeDialog occurrence={onTime.occurrence} now={onTime.now} who={who(onTime.occurrence)} onClose={() => setOnTime(null)} />}
     </div>
   );
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** "27 out" */
+function shortDate(date: Date): string {
+  return date.toLocaleDateString("pt-BR", { day: "numeric", month: "short" }).replace(".", "");
 }
