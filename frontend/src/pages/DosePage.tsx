@@ -201,6 +201,8 @@ function RecordForm({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
   const family = useFamily();
   const { deviceId } = useSession();
   const [at, setAt] = useState(() => toLocalInput(new Date()));
+  // Valor posto por "Agora" (o campo começa nele): o atalho aparece marcado enquanto o campo não muda.
+  const [nowValue, setNowValue] = useState(at);
   // Atalho para quem deu no horário: preenche o campo, mas o registro continua
   // sendo confirmado pela pessoa. Só aparece quando o horário previsto já passou.
   const planned = new Date(occurrence.scheduledAt) <= new Date() ? toLocalInput(new Date(occurrence.scheduledAt)) : null;
@@ -253,7 +255,9 @@ function RecordForm({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
             onClick={() => setAt(planned)}>
             No horário previsto ({formatTime(occurrence.scheduledAt)})
           </button>
-          <button type="button" className="chip" onClick={() => setAt(toLocalInput(new Date()))}>
+          <button type="button" className={`chip${at === nowValue && at !== planned ? " chip-on" : ""}`}
+            aria-pressed={at === nowValue && at !== planned}
+            onClick={() => { const now = toLocalInput(new Date()); setNowValue(now); setAt(now); }}>
             Agora
           </button>
         </div>

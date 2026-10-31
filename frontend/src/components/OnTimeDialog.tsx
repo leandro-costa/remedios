@@ -10,18 +10,31 @@ export function canRecordOnTime(o: OccurrenceView, queued: boolean): boolean {
   return (o.status === "PENDING" || o.status === "SCHEDULED") && !queued && new Date(o.scheduledAt) <= new Date();
 }
 
+/** O servidor aceita registrar até 6 h antes do horário previsto (dose de outro dia não). */
+const MAX_ADVANCE_MS = 6 * 3_600_000;
+
+/** "Dada agora": dose em aberto prevista até 6 h à frente. */
+export function canRecordNow(o: OccurrenceView, queued: boolean): boolean {
+  return (o.status === "PENDING" || o.status === "SCHEDULED") && !queued
+    && new Date(o.scheduledAt).getTime() <= Date.now() + MAX_ADVANCE_MS;
+}
+
 /**
- * Confirmação de "Dada no horário": registra a administração com o horário
+ * Confirmação de "Dada no horário" ou "Dada agora": registra a administração com o horário
  * previsto, depois de a pessoa conferir quem, o quê e quando. Funciona
  * offline (vai pela fila, como qualquer registro de dose).
  */
-export function OnTimeDialog({ occurrence, who, onClose }: { occurrence: OccurrenceView; who: string; onClose: () => void }) {
+export function OnTimeDialog({ occurrence, who, now = false, onClose }: {
+  occurrence: OccurrenceView; who: string; now?: boolean; onClose: () => void;
+}) {
   const family = useFamily();
   const { deviceId } = useSession();
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const at = formatTime(occurrence.scheduledAt);
+  // "Agora" é o momento em que a pessoa tocou no botão.
+  const [administeredAt] = useState(() => (now ? new Date().toISOString() : occurrence.scheduledAt));
+  const at = formatTime(administeredAt);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -41,7 +54,7 @@ export function OnTimeDialog({ occurrence, who, onClose }: { occurrence: Occurre
       kind: "ADMINISTER",
       deviceId,
       baseVersion: occurrence.version,
-      administeredAt: occurrence.scheduledAt,
+      administeredAt,
     });
     setBusy(false);
     if (result.state === "failed") {
@@ -57,10 +70,11 @@ export function OnTimeDialog({ occurrence, who, onClose }: { occurrence: Occurre
 
   return (
     <dialog ref={ref} className="confirm-dialog" aria-labelledby="on-time-title" onClose={onClose}>
-      <h2 id="on-time-title">Dada no horário?</h2>
+      <h2 id="on-time-title">{now ? "Dada agora?" : "Dada no horário?"}</h2>
       <p>
         Registrar que <strong>{who}</strong> recebeu <strong>{occurrence.treatment.name}</strong> (
-        {occurrence.treatment.prescribedDose}) às <strong>{at}</strong>, no horário previsto?
+        {occurrence.treatment.prescribedDose}) às <strong>{at}</strong>
+        {now ? ` (prevista para ${formatTime(occurrence.scheduledAt)})` : ", no horário previsto"}?
       </p>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="stack">

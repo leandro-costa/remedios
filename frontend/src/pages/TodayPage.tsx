@@ -6,7 +6,7 @@ import { AsNeededCard } from "../components/AsNeeded";
 import { Notice, Spinner } from "../components/Layout";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
-import { canRecordOnTime, OnTimeDialog } from "../components/OnTimeDialog";
+import { canRecordNow, canRecordOnTime, OnTimeDialog } from "../components/OnTimeDialog";
 import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
@@ -21,7 +21,7 @@ export function TodayPage() {
   const { me } = useSession();
   const [day, setDay] = useState(() => startOfDay(new Date()));
   const [personId, setPersonId] = useState<string | null>(null);
-  const [onTime, setOnTime] = useState<OccurrenceView | null>(null);
+  const [onTime, setOnTime] = useState<{ occurrence: OccurrenceView; now: boolean } | null>(null);
 
   // Busca de um dia antes a três depois: a cópia offline cobre os próximos dias.
   const from = addDays(day, -1);
@@ -58,6 +58,7 @@ export function TodayPage() {
     || (queued.get(o.id)?.state === "pending" && queued.get(o.id)?.kind === "ADMINISTER")).length;
   const open = (o: OccurrenceView) => (o.status === "PENDING" || o.status === "SCHEDULED") && !queued.has(o.id);
   const who = (o: OccurrenceView) => (mine.has(o.person.id) ? "você" : o.person.displayName);
+  const nowLabel = (o: OccurrenceView) => `Dada agora: ${o.treatment.name} de ${who(o)}, prevista para ${formatTime(o.scheduledAt)}`;
   const onTimeLabel = (o: OccurrenceView) =>
     `Dada no horário: ${o.treatment.name} de ${who(o)} às ${formatTime(o.scheduledAt)}`;
   const next = isToday ? doses.filter(open).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] : undefined;
@@ -109,14 +110,22 @@ export function TodayPage() {
               </span>
             </span>
           </div>
-          <div className={canRecordOnTime(next, false) ? "next-dose-actions" : "stack"}>
-            {canRecordOnTime(next, false) && (
-              <button className="btn btn-primary" aria-label={onTimeLabel(next)} onClick={() => setOnTime(next)}>
-                <Icon name="check" />Dada no horário
+          {(canRecordOnTime(next, false) || canRecordNow(next, false)) && (
+            <div className="next-dose-actions">
+              {canRecordOnTime(next, false) && (
+                <button className="btn btn-primary" aria-label={onTimeLabel(next)} onClick={() => setOnTime({ occurrence: next, now: false })}>
+                  <Icon name="check" />Dada no horário
+                </button>
+              )}
+              <button className={`btn ${canRecordOnTime(next, false) ? "" : "btn-primary"}`} aria-label={nowLabel(next)}
+                onClick={() => setOnTime({ occurrence: next, now: true })}>
+                <Icon name="check" />Dada agora
               </button>
-            )}
+            </div>
+          )}
+          <div className="stack">
             <Link to={`/doses/${next.id}`} state={{ occurrence: next }}
-              className={`btn ${canRecordOnTime(next, false) ? "" : "btn-primary"}`}
+              className={`btn ${canRecordNow(next, false) ? "" : "btn-primary"}`}
               aria-label={`Abrir dose: próxima de ${next.treatment.name}, ${who(next)}`}>
               Abrir dose
             </Link>
@@ -153,7 +162,9 @@ export function TodayPage() {
       <ul className="doses">
         {doses.map((o) => {
           const pending = queued.get(o.id);
-          const quick = canRecordOnTime(o, !!pending);
+          const onTimeOk = canRecordOnTime(o, !!pending);
+          const nowOk = canRecordNow(o, !!pending);
+          const quick = onTimeOk || nowOk;
           return (
             <li key={o.id} className="dose-row">
               <Link to={`/doses/${o.id}`} state={{ occurrence: o }}
@@ -173,9 +184,16 @@ export function TodayPage() {
                 </span>
               </Link>
               {quick && (
-                <button className="btn btn-small dose-quick" aria-label={onTimeLabel(o)} onClick={() => setOnTime(o)}>
-                  <Icon name="check" />Dada no horário
-                </button>
+                <div className="dose-quick">
+                  {onTimeOk && (
+                    <button className="btn btn-small" aria-label={onTimeLabel(o)} onClick={() => setOnTime({ occurrence: o, now: false })}>
+                      <Icon name="check" />Dada no horário
+                    </button>
+                  )}
+                  <button className="btn btn-small" aria-label={nowLabel(o)} onClick={() => setOnTime({ occurrence: o, now: true })}>
+                    <Icon name="check" />Dada agora
+                  </button>
+                </div>
               )}
             </li>
           );
@@ -187,7 +205,7 @@ export function TodayPage() {
           {asNeeded.map((t) => <AsNeededCard key={t.id} treatment={t} personName={personName(t.personId)} compact />)}
         </section>
       )}
-      {onTime && <OnTimeDialog occurrence={onTime} who={who(onTime)} onClose={() => setOnTime(null)} />}
+      {onTime && <OnTimeDialog occurrence={onTime.occurrence} now={onTime.now} who={who(onTime.occurrence)} onClose={() => setOnTime(null)} />}
     </div>
   );
 }

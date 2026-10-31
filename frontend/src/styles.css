@@ -254,8 +254,9 @@ legend { font-weight: 600; margin-bottom: 0.5rem; }
 .dose-row { position: relative; }
 .dose-has-quick { padding-bottom: 4rem; }
 /* Alinhado à coluna do medicamento: 1rem de margem + 3.4rem do horário + 0.75rem de espaço. */
-.dose-quick { position: absolute; left: calc(0.9rem + 3.2rem + 0.75rem + 1.5px); bottom: 1.4rem; white-space: nowrap; }
-.next-dose-actions { display: grid; grid-template-columns: 3fr 2fr; gap: 0.6rem; }
+.dose-quick { position: absolute; left: calc(0.9rem + 1.5px); right: calc(0.9rem + 1.5px); bottom: 1.4rem; display: flex; gap: 0.5rem; }
+.dose-quick .btn { flex: 1; white-space: nowrap; }
+.next-dose-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.6rem; margin-bottom: 0.6rem; }
 .next-dose-actions .btn { white-space: nowrap; padding-inline: 0.75rem; }
 .btn svg { flex: none; }
 .confirm-dialog {
