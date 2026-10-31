@@ -27,12 +27,13 @@ public class PrescriptionResource {
     }
 
     /** {@code status}: calculada a partir dos itens. */
-    public record PrescriptionView(UUID id, UUID personId, String title, String prescriber, LocalDate prescribedOn,
-            String notes, Treatment.Status status, List<ItemView> items, Instant createdAt, Instant updatedAt) {
+    public record PrescriptionView(UUID id, UUID personId, Prescription.Kind kind, String title, String prescriber,
+            LocalDate prescribedOn, String notes, Treatment.Status status, List<ItemView> items, Instant createdAt,
+            Instant updatedAt) {
 
         static PrescriptionView of(Prescription p) {
             List<Treatment> items = PrescriptionService.items(p.id);
-            return new PrescriptionView(p.id, p.personId, p.title, p.prescriber, p.prescribedOn, p.notes,
+            return new PrescriptionView(p.id, p.personId, p.kind, p.title, p.prescriber, p.prescribedOn, p.notes,
                     PrescriptionService.status(items),
                     items.stream().map(t -> new ItemView(t.id, t.name, t.medicationId, t.kind, t.status,
                             t.prescribedDose)).toList(),

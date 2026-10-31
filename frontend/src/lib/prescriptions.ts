@@ -31,7 +31,32 @@ export function prescriptionStatus(items: Pick<TreatmentView, "status">[]): Trea
 }
 
 /** Título da receita, ou os medicamentos dela. */
-export function prescriptionTitle(p: Pick<PrescriptionView, "title"> | undefined, items: Pick<TreatmentView, "name">[]): string {
+export function prescriptionTitle(p: Pick<PrescriptionView, "title"> | undefined,
+  items: Pick<TreatmentView, "name" | "personId" | "prescriptionId">[]): string {
   if (p?.title) return p.title;
+  if (items.some((i) => i.prescriptionId && i.prescriptionId === i.personId)) return EVENTUAL_TITLE;
   return items.length ? items.map((i) => i.name).join(" + ") : "Receita sem itens";
+}
+
+export const EVENTUAL_TITLE = "Uso eventual";
+
+/** O uso eventual de uma pessoa tem o id da própria pessoa. */
+export function isEventual(t: Pick<TreatmentView, "personId" | "prescriptionId">): boolean {
+  return Boolean(t.prescriptionId) && t.prescriptionId === t.personId;
+}
+
+/**
+ * Itens do uso eventual ocultos porque uma receita ativa da mesma pessoa tem o
+ * mesmo medicamento: vale o da receita (dose e orientação dela). Quando a
+ * receita termina, o item do uso eventual volta.
+ */
+export function hiddenEventual(treatments: TreatmentView[]): Map<string, TreatmentView> {
+  const hidden = new Map<string, TreatmentView>();
+  for (const t of treatments) {
+    if (!isEventual(t) || t.status !== "ACTIVE" || !t.medicationId) continue;
+    const other = treatments.find((o) => !isEventual(o) && o.personId === t.personId
+      && o.medicationId === t.medicationId && o.status === "ACTIVE");
+    if (other) hidden.set(t.id, other);
+  }
+  return hidden;
 }

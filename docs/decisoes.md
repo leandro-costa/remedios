@@ -240,6 +240,14 @@ São parâmetros operacionais, não orientação clínica.
   pelos itens, nunca guardada. Itens com término são encerrados pelo sistema
   ao fim do período (auditoria sem autor); quando acabam os itens com horário,
   os "se necessário" da receita terminam junto.
+- **Uso eventual por pessoa** (V15): uma receita fixa por pessoa, com o id
+  da pessoa (o aparelho sabe qual é sem perguntar ao servidor e funciona
+  offline antes de ela existir), só com itens "se necessário". Se uma receita
+  ativa tem o mesmo medicamento (o mesmo cadastro, não só o nome), o item do
+  uso eventual some das telas enquanto ela durar: vale a dose e a orientação
+  da receita. Ao encerrar uma receita, o app pergunta se os "se necessário"
+  dela ficam no uso eventual; quando o sistema encerra sozinho, a pergunta
+  aparece em Hoje e na receita. "Não manter" é lembrado só no aparelho.
 - **Histórico por medicamento, não por tratamento.** O mesmo medicamento em
   tratamentos diferentes (uma receita com horários e o uso eventual) aparece
   num histórico único: no Histórico (filtro por medicamento), na tela do

@@ -170,6 +170,7 @@ public class TreatmentService {
         t.familyId = familyId;
         t.personId = personId;
         t.prescriptionId = prescriptionFor(familyId, personId, prescriptionId, now).id;
+        requireKindFits(t.prescriptionId, data.kind());
         apply(t, data);
         t.status = Treatment.Status.DRAFT;
         t.version = 1;
@@ -187,6 +188,9 @@ public class TreatmentService {
     }
 
     private Prescription prescriptionFor(UUID familyId, UUID personId, UUID prescriptionId, Instant now) {
+        if (prescriptionId != null && prescriptionId.equals(personId)) {
+            return eventualFor(familyId, personId, now);
+        }
         if (prescriptionId != null) {
             Prescription p = Prescription.findInFamily(familyId, prescriptionId)
                     .orElseThrow(() -> ApiException.unprocessable("UNKNOWN_PRESCRIPTION",
@@ -206,6 +210,38 @@ public class TreatmentService {
         p.updatedAt = now;
         p.persist();
         return p;
+    }
+
+    /** O uso eventual da pessoa (id = id da pessoa), criado no primeiro uso. */
+    private Prescription eventualFor(UUID familyId, UUID personId, Instant now) {
+        Prescription p = Prescription.findById(personId);
+        if (p == null) {
+            p = new Prescription();
+            p.id = personId;
+            p.familyId = familyId;
+            p.personId = personId;
+            p.kind = Prescription.Kind.EVENTUAL;
+            p.title = "Uso eventual";
+            p.createdBy = currentUser.id();
+            p.createdAt = now;
+            p.updatedAt = now;
+            p.persist();
+        } else if (p.deletedAt != null) {
+            p.deletedAt = null;
+            p.deletedBy = null;
+            p.deleteReason = null;
+            p.updatedAt = now;
+        }
+        return p;
+    }
+
+    /** No uso eventual, só itens "se necessário". */
+    private static void requireKindFits(UUID prescriptionId, Treatment.Kind kind) {
+        Prescription p = Prescription.findById(prescriptionId);
+        if (p != null && p.kind == Prescription.Kind.EVENTUAL && kind != Treatment.Kind.AS_NEEDED) {
+            throw ApiException.unprocessable("EVENTUAL_ONLY_AS_NEEDED",
+                    "O uso eventual só tem remédios \"se necessário\".");
+        }
     }
 
     // --- Fim do período previsto ---------------------------------------------
@@ -435,6 +471,7 @@ public class TreatmentService {
             throw ApiException.conflict("TREATMENT_ENDED", "Tratamentos encerrados não podem ser alterados.");
         }
         validate(data);
+        requireKindFits(t.prescriptionId, data.kind());
         requireEffectiveFrom(t, change);
         if (t.status != Treatment.Status.DRAFT
                 && (t.kind == Treatment.Kind.AS_NEEDED) != (data.kind() == Treatment.Kind.AS_NEEDED)) {
