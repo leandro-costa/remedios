@@ -123,7 +123,7 @@ public class OutboxPublisher {
         String who = name(actor);
         FamilySettings.ConfirmationPolicy policy = policy(e.familyId);
         Set<UUID> reminded = new HashSet<>(reminders.reminded(o.id));
-        List<UUID> members = notifier.members(e.familyId);
+        List<UUID> members = notifier.members(e.familyId, t.personId);
         Map<UUID, UserNotificationSettings> prefs = notifier.preferences(members);
         String detail = person.displayName + " · " + t.name;
         String tag = "dose-" + o.id;
@@ -212,7 +212,7 @@ public class OutboxPublisher {
             };
             default -> "alterou";
         };
-        return notifier.members(e.familyId).stream().filter(u -> !u.equals(t.updatedBy))
+        return notifier.members(e.familyId, t.personId).stream().filter(u -> !u.equals(t.updatedBy))
                 .map(u -> new Notice(u, "Tratamento atualizado", who + " " + verb + ": " + t.name + " (" + person.displayName + ")",
                         who + " " + verb + " um tratamento.", "treatment-" + t.id,
                         t.deletedAt != null ? "/tratamentos" : "/tratamentos/" + t.id, false,
@@ -227,7 +227,7 @@ public class OutboxPublisher {
             return List.of();
         }
         Person person = Person.findById(t.personId);
-        return notifier.members(e.familyId).stream()
+        return notifier.members(e.familyId, t.personId).stream()
                 .map(u -> new Notice(u, "Alteração para conferir", "Confira o tratamento " + t.name + " ("
                         + person.displayName + "): há uma alteração feita sem conexão.",
                         "Um tratamento tem uma alteração feita sem conexão para conferir.", "treatment-" + t.id,

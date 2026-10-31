@@ -104,7 +104,7 @@ public class CustomReminderService {
             if (Duration.between(r.remindAt, now).compareTo(maxDelay.multipliedBy(4)) > 0) {
                 continue; // velho demais (servidor ficou parado): não avisa fora de hora
             }
-            List<UUID> users = r.notifyAll ? notifier.members(r.familyId) : List.of(r.createdBy);
+            List<UUID> users = r.notifyAll ? notifier.members(r.familyId, r.personId) : List.of(r.createdBy);
             Map<UUID, UserNotificationSettings> prefs = notifier.preferences(users);
             Person person = Person.findById(r.personId);
             notifier.subscriptions(users).forEach((user, subs) -> {

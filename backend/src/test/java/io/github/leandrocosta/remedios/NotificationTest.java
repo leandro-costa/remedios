@@ -272,6 +272,28 @@ class NotificationTest {
     }
 
     @Test
+    void recipientsFilterByPerson() throws Exception {
+        // Bruno (membro) não escolhe pela Ana; a Ana (administradora) escolhe pelo Bruno.
+        d.bruno.req().body(Map.of("mutedPersonIds", List.of(d.person)))
+                .put("/api/families/{f}/notification-recipients/{u}", d.family, d.ana.id()).then().statusCode(403);
+        d.ana.req().body(Map.of("mutedPersonIds", List.of(d.person)))
+                .put("/api/families/{f}/notification-recipients/{u}", d.family, d.bruno.id()).then().statusCode(200)
+                .body("mutedPersonIds[0]", equalTo(d.person));
+        d.ana.req().get("/api/families/{f}/notification-recipients", d.family).then().statusCode(200)
+                .body("find { it.userId == '%s' }.mutedPersonIds".formatted(d.bruno.id()), org.hamcrest.Matchers.hasSize(1));
+
+        reminders.tick(at);
+        assertEquals(1, anaPhone.take().size());
+        assertEquals(0, brunoPhone.take().size(), "Bruno não recebe os lembretes do Gabriel");
+
+        // Ele mesmo volta a receber.
+        d.bruno.req().body(Map.of("mutedPersonIds", List.of()))
+                .put("/api/families/{f}/notification-recipients/{u}", d.family, d.bruno.id()).then().statusCode(200);
+        reminders.tick(at.plus(15, ChronoUnit.MINUTES));
+        assertEquals(1, brunoPhone.take().size());
+    }
+
+    @Test
     void revokedDeviceStopsReceiving() throws Exception {
         d.bruno.req().delete("/api/me/devices/{d}", d.brunoDevice).then().statusCode(204);
         reminders.tick(at);
