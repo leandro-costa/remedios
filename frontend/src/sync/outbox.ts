@@ -1,5 +1,6 @@
 import { api, ApiError, OfflineError } from "../api/client";
 import type { OccurrenceView } from "../api/types";
+import { commitEffects } from "../db/cache";
 import { db, type Effect, type OutboxItem, type ReportKind } from "../db/db";
 
 type Listener = () => void;
@@ -211,7 +212,10 @@ export function flush(): Promise<void> {
       if (item.state !== "pending") continue;
       try {
         const result = await send(item);
-        await db.outbox.delete(item.id);
+        await db.transaction("rw", db.cache, db.outbox, async () => {
+          await commitEffects(item.effects ?? []);
+          await db.outbox.delete(item.id);
+        });
         settle(item.id, { state: "synced", result });
       } catch (error) {
         if (error instanceof OfflineError) break;
