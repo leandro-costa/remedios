@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { CustomReminderView, MeasurementType, PersonView, ReferenceLineView } from "../api/types";
+import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
@@ -29,7 +30,10 @@ export function HealthPage() {
   const [params, setParams] = useSearchParams();
   const persons = useCached(`persons:${family.id}`, () =>
     api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
-  const personId = params.get("pessoa") ?? persons.data?.[0]?.id ?? null;
+  // Com mais de uma pessoa, a tela abre em "Todos", agrupada por pessoa (como Tratamentos).
+  const several = (persons.data?.length ?? 0) > 1;
+  const personId = params.get("pessoa") ?? (several ? null : persons.data?.[0]?.id ?? null);
+  const all = several && !personId;
   const [hours, setHours] = useState(24);
   // Período fixado ao escolher (a chave do cache não muda a cada render).
   const [anchor, setAnchor] = useState(() => Date.now());
@@ -49,10 +53,12 @@ export function HealthPage() {
   return (
     <div className="page">
       <PageHeader title="Saúde" subtitle={person
-        ? `Aferições e sintomas de ${person.userId && person.userId === me?.id ? "você" : person.displayName}` : undefined} />
+        ? `Aferições e sintomas de ${person.userId && person.userId === me?.id ? "você" : person.displayName}`
+        : all ? "Aferições e sintomas da família" : undefined} />
       <SyncStatus familyId={family.id} fresh={health.fresh} savedAt={health.savedAt} />
 
       <div className="chips" role="group" aria-label="Pessoa">
+        {several && <button className={`chip ${all ? "chip-on" : ""}`} onClick={() => setParams({})}>Todos</button>}
         {(persons.data ?? []).map((p) => (
           <button key={p.id} className={`chip ${p.id === personId ? "chip-on" : ""}`} onClick={() => setParams({ pessoa: p.id })}>
             {p.userId && p.userId === me?.id ? "Você" : p.displayName}
@@ -60,12 +66,10 @@ export function HealthPage() {
         ))}
       </div>
 
-      {personId && (
-        <div className="grid-2">
-          <Link className="btn btn-primary" to={`/saude/aferir?pessoa=${personId}`}>+ Aferição</Link>
-          <Link className="btn" to={`/saude/sintoma?pessoa=${personId}`}>+ Sintoma</Link>
-        </div>
-      )}
+      <div className="grid-2">
+        <Link className="btn btn-primary" to={personId ? `/saude/aferir?pessoa=${personId}` : "/saude/aferir"}>+ Aferição</Link>
+        <Link className="btn" to={personId ? `/saude/sintoma?pessoa=${personId}` : "/saude/sintoma"}>+ Sintoma</Link>
+      </div>
 
       <div className="chips" role="group" aria-label="Período">
         {PERIODS.map((p) => (
@@ -74,6 +78,13 @@ export function HealthPage() {
         ))}
       </div>
 
+      {all && (persons.data ?? []).map((p) => (
+        <PersonSummary key={p.id} person={p} name={p.userId && p.userId === me?.id ? "Você" : p.displayName}
+          from={from} to={to} onOpen={() => setParams({ pessoa: p.id })} />
+      ))}
+      {/* Uma pessoa: gráficos, lembretes e linha do tempo. */}
+      {!all && (
+      <>
       {health.error && <Notice tone="error">{health.error}</Notice>}
       {health.loading && <Spinner />}
 
@@ -113,7 +124,52 @@ export function HealthPage() {
 
       <Timeline measurements={health.measurements} symptoms={health.symptoms}
         doses={health.doses.map((o) => ({ id: o.id, at: o.administration!.administeredAt, label: o.treatment.name, by: o.administration!.recordedBy?.displayName }))} />
+      </>
+      )}
     </div>
+  );
+}
+
+/** Resumo de uma pessoa em "Todos": sintomas em andamento e a última aferição de cada tipo. */
+function PersonSummary({ person, name, from, to, onOpen }: {
+  person: PersonView; name: string; from: Date; to: Date; onOpen: () => void;
+}) {
+  const family = useFamily();
+  const health = useHealth(family.id, person.id, from, to);
+  const ongoing = health.symptoms.filter((s) => !s.endedAt);
+  const latest = new Map<string, MeasurementItem>();
+  for (const m of [...health.measurements].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))) {
+    const key = m.type === "OTHER" ? `${m.label}|${m.unit}` : m.type;
+    if (!latest.has(key)) latest.set(key, m);
+  }
+  return (
+    <section aria-label={`Saúde de ${name}`}>
+      <h2 className="group-head">
+        <Avatar name={person.displayName} id={person.id} size={32} />
+        {name}
+      </h2>
+      {health.loading && latest.size === 0 && ongoing.length === 0 && <Spinner />}
+      <ul className="cards">
+        {ongoing.map((s) => <SymptomLine key={s.id} symptom={s} />)}
+        {[...latest.values()].map((m) => (
+          <li key={m.id}>
+            <button type="button" className="item item-button" onClick={onOpen}>
+              <span className="tile"><Icon name="heart" /></span>
+              <span className="item-main">
+                <strong>{m.type === "OTHER" ? m.label : MEASUREMENT_TYPES[m.type].label}: {formatMeasurement(m)}</strong>
+                <span className="muted small">última · {formatWhen(m.measuredAt)}{m.recordedBy?.displayName ? ` · ${m.recordedBy.displayName}` : ""}</span>
+                {m.pending && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+              </span>
+              <span className="item-chevron"><Icon name="chevron" /></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {!health.loading && latest.size === 0 && ongoing.length === 0 && (
+        <p className="muted small">Nenhuma aferição nem sintoma em andamento neste período.</p>
+      )}
+      <button type="button" className="link" onClick={onOpen}>Ver gráficos e linha do tempo de {name} →</button>
+    </section>
   );
 }
 
