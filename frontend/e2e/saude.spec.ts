@@ -21,7 +21,8 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await p.getByRole("link", { name: "Família" }).click();
   await p.getByLabel("Nome", { exact: true }).fill("Gabriel");
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
-  await expect(p.getByText("Gabriel", { exact: true })).toBeVisible();
+  await expect(p.getByText("Gabriel", { exact: true }).first()).toBeVisible();
+  await expect(p.getByLabel("Nome", { exact: true })).toHaveValue("");
 
   // Antitérmico dado há pouco mais de 1 h
   await p.getByRole("link", { name: "Tratamentos" }).click();

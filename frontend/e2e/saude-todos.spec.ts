@@ -10,7 +10,7 @@ test("saúde: com mais de uma pessoa abre em Todos, agrupado por pessoa", async 
   for (const name of ["Gabriel", "Lia"]) {
     await p.getByLabel("Nome", { exact: true }).fill(name);
     await p.getByRole("button", { name: "Adicionar pessoa" }).click();
-    await expect(p.getByText(name, { exact: true })).toBeVisible();
+    await expect(p.getByLabel("Nome", { exact: true })).toHaveValue("");
   }
 
   // Aferição do Gabriel e sintoma da Lia, cadastrados a partir de "Todos".

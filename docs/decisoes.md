@@ -229,6 +229,11 @@ São parâmetros operacionais, não orientação clínica.
   Os tratamentos que já existiam ganharam um medicamento por nome. Sem
   `medicationId`, o servidor liga o tratamento ao medicamento de mesmo nome
   (ou cria), para aparelhos antigos ou registros feitos offline.
+- **Avisos por pessoa** (V14, `notification_mute`): guarda só as exclusões;
+  sem registro, o responsável recebe tudo. O administrador escolhe por
+  responsável e por pessoa; cada um pode mudar o seu. A tela avisa quando
+  ninguém recebe os avisos de uma pessoa. O filtro só corta notificações:
+  tudo continua visível no app.
 - **Receita com vários itens** (V13): cada item continua sendo um tratamento,
   e a receita os agrupa (título, quem prescreveu, data). Os tratamentos que
   já existiam viraram receitas de um item. A situação da receita é calculada

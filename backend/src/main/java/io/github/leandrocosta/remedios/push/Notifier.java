@@ -36,6 +36,16 @@ public class Notifier {
         return FamilyMember.listActive(familyId).stream().map(m -> m.userId).toList();
     }
 
+    /** Responsáveis que recebem os avisos e lembretes desta pessoa (filtro por pessoa). */
+    @SuppressWarnings("unchecked")
+    public List<UUID> members(UUID familyId, UUID personId) {
+        java.util.Set<UUID> muted = new java.util.HashSet<>(io.quarkus.hibernate.orm.panache.Panache.getEntityManager()
+                .createNativeQuery("SELECT user_id FROM notification_mute WHERE family_id = :f AND person_id = :p",
+                        UUID.class)
+                .setParameter("f", familyId).setParameter("p", personId).getResultList());
+        return members(familyId).stream().filter(u -> !muted.contains(u)).toList();
+    }
+
     public Map<UUID, List<PushSubscription>> subscriptions(Collection<UUID> userIds) {
         return PushSubscription.activeFor(userIds).stream().collect(Collectors.groupingBy(s -> s.userId));
     }

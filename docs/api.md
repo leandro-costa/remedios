@@ -384,6 +384,15 @@ administração. `OPEN` devolve a dose ao estado em aberto.
 
 ## Notificações
 
+**Quem recebe os avisos de cada pessoa.** Por padrão, todos os responsáveis
+recebem os lembretes e avisos de todas as pessoas. `GET
+/api/families/{f}/notification-recipients` lista cada responsável com
+`mutedPersonIds` (pessoas de quem ele não recebe nada); `PUT
+/api/families/{f}/notification-recipients/{userId}` com `{mutedPersonIds}`
+substitui a lista. O administrador altera a de qualquer responsável; os demais,
+só a própria (`403`). Vale para lembretes de dose, avisos de registro,
+conferências e lembretes avulsos "para todos".
+
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | GET | `/api/push/config` | `{enabled, publicKey}`: chave VAPID para o navegador se inscrever |

@@ -13,7 +13,8 @@ test("dada no horário: um toque na tela Hoje, com confirmação, online e offli
   await p.getByRole("link", { name: "Família" }).click();
   await p.getByLabel("Nome", { exact: true }).fill("Gabriel");
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
-  await expect(p.getByText("Gabriel", { exact: true })).toBeVisible();
+  await expect(p.getByText("Gabriel", { exact: true }).first()).toBeVisible();
+  await expect(p.getByLabel("Nome", { exact: true })).toHaveValue("");
 
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();

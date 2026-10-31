@@ -46,6 +46,7 @@ export function FamilyPage() {
       <h2 className="section-title">Configurações</h2>
       <Defaults isAdmin={isAdmin} />
       <PushSettings />
+      <Recipients isAdmin={isAdmin} />
       <Preferences />
       <Devices />
       {isAdmin && <ExportData />}
@@ -518,6 +519,73 @@ function ExportData() {
         URL.revokeObjectURL(url);
       })}>Exportar dados da família</button>
       {!online && <p className="muted small">A exportação precisa de conexão: o arquivo é montado pelo servidor.</p>}
+    </section>
+  );
+}
+
+interface RecipientView {
+  userId: string;
+  displayName: string | null;
+  admin: boolean;
+  /** Pessoas de quem este responsável não recebe avisos nem lembretes. */
+  mutedPersonIds: string[];
+}
+
+/**
+ * Quem recebe os avisos e lembretes de cada pessoa. Por padrão, todos recebem
+ * de todas; o administrador escolhe para cada responsável, e cada um para si.
+ */
+function Recipients({ isAdmin }: { isAdmin: boolean }) {
+  const family = useFamily();
+  const { me } = useSession();
+  const recipients = useCached(`notification-recipients:${family.id}`, () =>
+    api<RecipientView[]>(`/families/${family.id}/notification-recipients`));
+  const persons = useCached(`persons:${family.id}`, () =>
+    api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
+  const { busy, error, run } = useAction();
+  const list = recipients.data ?? [];
+  const people = persons.data ?? [];
+  if (list.length === 0 || people.length === 0) return null;
+  const nobody = people.filter((p) => list.every((r) => r.mutedPersonIds.includes(p.id)));
+
+  const toggle = (r: RecipientView, personId: string, receives: boolean) => void run(() => {
+    const muted = receives ? r.mutedPersonIds.filter((id) => id !== personId) : [...r.mutedPersonIds, personId];
+    return mutate({
+      familyId: family.id, method: "PUT", path: `/families/${family.id}/notification-recipients/${r.userId}`,
+      body: { mutedPersonIds: muted }, label: `Avisos de ${r.displayName ?? "responsável"}`,
+      effects: [{ key: `notification-recipients:${family.id}`, op: "merge", id: r.userId, value: { mutedPersonIds: muted } }],
+    });
+  });
+
+  return (
+    <section className="card stack" aria-label="Quem recebe os avisos">
+      <h2>Quem recebe os avisos</h2>
+      <p className="muted small">
+        Lembretes de dose e avisos de cada pessoa. Desmarcado, o responsável não recebe nada daquela pessoa
+        (mas continua vendo tudo no app). {isAdmin ? "Como administrador, você escolhe para todos." : "Você escolhe para você."}
+      </p>
+      {error && <Notice tone="error">{error}</Notice>}
+      {nobody.length > 0 && (
+        <Notice tone="warn">Ninguém recebe os avisos de {nobody.map((p) => p.displayName).join(", ")}.</Notice>
+      )}
+      {list.map((r) => {
+        const editable = isAdmin || r.userId === me?.id;
+        const name = r.userId === me?.id ? "Você" : r.displayName ?? "Responsável";
+        return (
+          <fieldset key={r.userId} className="stack" disabled={!editable || busy}>
+            <legend>{name}{r.admin ? " (administrador)" : ""}</legend>
+            {people.map((p) => (
+              <label key={p.id} className="switch">
+                <span>{p.userId && p.userId === me?.id ? "Você" : p.displayName}</span>
+                <input type="checkbox" checked={!r.mutedPersonIds.includes(p.id)}
+                  aria-label={`${name} recebe os avisos de ${p.displayName}`}
+                  onChange={(e) => toggle(r, p.id, e.target.checked)} />
+              </label>
+            ))}
+            {isPending(r) && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
+          </fieldset>
+        );
+      })}
     </section>
   );
 }

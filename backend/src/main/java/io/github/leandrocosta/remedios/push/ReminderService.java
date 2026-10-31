@@ -131,17 +131,17 @@ public class ReminderService {
         Map<String, Snooze> snoozes = snoozes(rows.stream().map(r -> ((DoseOccurrence) r[0]).id).toList());
 
         List<Notifier.Delivery> deliveries = new ArrayList<>();
-        Map<UUID, List<UUID>> membersByFamily = new java.util.HashMap<>();
+        Map<UUID, List<UUID>> membersByPerson = new java.util.HashMap<>();
         for (Object[] row : rows) {
             DoseOccurrence o = (DoseOccurrence) row[0];
             TreatmentSchedule s = (TreatmentSchedule) row[1];
-            List<UUID> members = membersByFamily.computeIfAbsent(o.familyId, notifier::members);
+            Treatment t = treatments.get(o.treatmentId);
+            List<UUID> members = membersByPerson.computeIfAbsent(t.personId, person -> notifier.members(o.familyId, person));
             Map<UUID, List<PushSubscription>> subscriptions = notifier.subscriptions(members);
             if (subscriptions.isEmpty()) {
                 continue;
             }
             Map<UUID, UserNotificationSettings> prefs = notifier.preferences(subscriptions.keySet());
-            Treatment t = treatments.get(o.treatmentId);
             Person p = persons.get(t.personId);
             boolean claimed = o.claimedBy != null && o.claimedUntil.isAfter(now);
 
