@@ -46,6 +46,28 @@ app nativo (Capacitor) com notificações locais. Detalhes em
 - **Tudo é gravado offline** (veja a seção abaixo). Online, uma versão
   desatualizada continua recebendo `409`, com a proposta mantida no formulário.
 
+## Leitura offline em todo o app
+
+Regra do produto: **toda informação de toda tela fica guardada no aparelho**,
+inclusive a das telas que ainda não foram abertas.
+
+- **Chave estável.** A cópia de cada consulta é guardada por uma chave que não
+  leva o horário exato da consulta (ex.: Saúde guarda por pessoa e período,
+  "últimas 24 h", e não pelo instante em que a tela abriu). Antes, cada
+  abertura da tela Saúde gerava uma chave nova e, sem conexão, a cópia
+  anterior nunca era encontrada.
+- **Uma lista de consultas** (`frontend/src/lib/queries.ts`): chave e busca de
+  cada consulta, usadas pelas telas e pelo pré-carregamento.
+- **Pré-carregamento** (`frontend/src/sync/prefetch.ts`): ao abrir o app (três
+  segundos depois, para não atrasar a tela), ao reconectar e a cada 10
+  minutos, o app envia a fila e guarda pessoas, tratamentos, receitas,
+  medicamentos e o uso de cada um, agenda, histórico, saúde de cada pessoa
+  (últimas 24 h), lembretes, conflitos e configurações. Duas consultas por
+  vez, com pausa (cerca de 6 por segundo), longe do limite do servidor, que
+  vale por endereço (a família em casa compartilha um).
+- **O que exige conexão** continua igual: criar convite, exportar dados e
+  enviar o aviso de teste.
+
 ## Gravação offline em todo o app
 
 Regra do produto: **toda gravação é feita primeiro no aparelho, aparece na

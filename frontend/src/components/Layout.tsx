@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
-import { useFamily } from "../session";
+import { useFamily, useSession } from "../session";
+import { prefetch } from "../sync/prefetch";
 import { Icon, type IconName } from "./Icon";
 import { PendingChanges, QueueBadge } from "./PendingChanges";
 
@@ -14,6 +15,24 @@ const NAV: { to: string; label: string; icon: IconName }[] = [
 
 export function Layout() {
   const family = useFamily();
+  const { me } = useSession();
+  // Dados de todas as telas guardados no aparelho, para abrir qualquer uma sem conexão.
+  useEffect(() => {
+    const go = (force = false) => void prefetch(family, me?.id ?? null, force);
+    const online = () => go(true);
+    const visible = () => document.visibilityState === "visible" && go();
+    // Depois de a tela aberta carregar, para não disputar a conexão com ela.
+    const first = window.setTimeout(() => go(), 3_000);
+    window.addEventListener("online", online);
+    document.addEventListener("visibilitychange", visible);
+    const timer = window.setInterval(() => go(), 60_000);
+    return () => {
+      window.removeEventListener("online", online);
+      document.removeEventListener("visibilitychange", visible);
+      window.clearInterval(timer);
+      window.clearTimeout(first);
+    };
+  }, [family, me?.id]);
   return (
     <div className="app">
       {/* Sem barra no topo (como no design): a fila aparece flutuando só quando há algo pendente. */}

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { api, errorMessage } from "../api/client";
+import { errorMessage } from "../api/client";
 import type { OccurrenceView, TreatmentView } from "../api/types";
 import { doseLabel } from "../lib/labels";
 import { isPending } from "../db/cache";
 import { useCached } from "../hooks/useCached";
+import { queries } from "../lib/queries";
 import { formatAgo, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
 import { mutate } from "../sync/outbox";
 import { useFamily, useSession } from "../session";
@@ -12,30 +13,15 @@ import { Icon } from "./Icon";
 import { Notice } from "./Layout";
 
 const DAY_MS = 86_400_000;
-/** Até onde buscar doses anteriores (a API aceita no máximo 62 dias por consulta). */
-const LOOKBACK_DAYS = 60;
 
-/**
- * Doses consolidadas por pessoa e medicamento: as de todos os tratamentos com
- * o mesmo medicamento (receita ou uso eventual) entram na última dose e na
- * contagem de 24 h. Sem medicamento (cadastro ainda não enviado), as do tratamento.
- */
-export const asNeededKey = (t: Pick<TreatmentView, "id" | "personId" | "medicationId">) =>
-  t.medicationId ? `med-history:${t.personId}:${t.medicationId}` : `as-needed:${t.id}`;
+/** Chave das doses consolidadas por pessoa e medicamento (ver queries.asNeeded). */
+export const asNeededKey = (t: Pick<TreatmentView, "id" | "personId" | "medicationId">) => queries.asNeeded("", t).key;
 
 /** Doses registradas, da mais recente para a mais antiga. */
 export function useAsNeededDoses(t: TreatmentView) {
   const family = useFamily();
-  return useCached(asNeededKey(t), () => {
-    const now = Date.now();
-    return api<OccurrenceView[]>(`/families/${family.id}/history`, {
-      query: {
-        ...(t.medicationId ? { personId: t.personId, medicationId: t.medicationId } : { treatmentId: t.id }), limit: "200",
-        from: new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString(),
-        to: new Date(now + 3_600_000).toISOString(),
-      },
-    });
-  });
+  const query = queries.asNeeded(family.id, t);
+  return useCached(query.key, query.fetch);
 }
 
 /** Última dose dada e quantas nas últimas 24 h. Só conta; não diz quando dar a próxima. */

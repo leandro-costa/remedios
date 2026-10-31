@@ -1,18 +1,15 @@
 import { Link, useParams } from "react-router";
-import { api } from "../api/client";
-import type { OccurrenceView } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
 import { ScreenBar } from "../components/ScreenBar";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
+import { queries } from "../lib/queries";
 import { formatTime, formatWhen } from "../lib/time";
 import { useFamily } from "../session";
 import { doseLabel } from "../lib/labels";
 import { useMedications } from "./MedicationsPage";
-
-const DAY_MS = 86_400_000;
 
 /**
  * Um medicamento da família e o histórico de uso consolidado: as doses dele
@@ -23,12 +20,8 @@ export function MedicationDetailPage() {
   const family = useFamily();
   const medications = useMedications();
   const m = medications.data?.find((x) => x.id === id);
-  const history = useCached(`medication-history:${id}`, () => {
-    const now = Date.now();
-    return api<OccurrenceView[]>(`/families/${family.id}/history`, {
-      query: { medicationId: id, from: new Date(now - 60 * DAY_MS).toISOString(), to: new Date(now + 3_600_000).toISOString(), limit: 200 },
-    });
-  });
+  const query = queries.medicationHistory(family.id, id!);
+  const history = useCached(query.key, query.fetch);
   if (!m) return medications.loading ? <Spinner /> : <div className="page"><Notice tone="error">Medicamento não encontrado.</Notice></div>;
 
   return (

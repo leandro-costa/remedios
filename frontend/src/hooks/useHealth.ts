@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { api } from "../api/client";
-import type { MeasurementType, MeasurementView, OccurrenceView, ReferenceLineView, SymptomView } from "../api/types";
+import { useEffect, useMemo, useRef } from "react";
+import type { MeasurementType, MeasurementView, SymptomView } from "../api/types";
 import type { OutboxItem } from "../db/db";
+import { queries } from "../lib/queries";
 import { useCached } from "./useCached";
 import { useOutbox } from "./useOutbox";
 
@@ -9,18 +9,28 @@ import { useOutbox } from "./useOutbox";
 export type MeasurementItem = MeasurementView & { pending?: boolean };
 export type SymptomItem = SymptomView & { pending?: boolean };
 
-/** Dados de saúde de uma pessoa num período, com os registros pendentes da fila. */
-export function useHealth(familyId: string, personId: string | null, from: Date, to: Date) {
-  const range = { from: from.toISOString(), to: to.toISOString() };
-  const key = personId ? `${familyId}:${personId}:${range.from}:${range.to}` : null;
-  const measurements = useCached(key && `measurements:${key}`, () =>
-    api<MeasurementView[]>(`/families/${familyId}/persons/${personId}/measurements`, { query: range }));
-  const symptoms = useCached(key && `symptoms:${key}`, () =>
-    api<SymptomView[]>(`/families/${familyId}/persons/${personId}/symptoms`, { query: range }));
-  const doses = useCached(key && `doses:${key}`, () =>
-    api<OccurrenceView[]>(`/families/${familyId}/history`, { query: { ...range, personId, limit: 500 } }));
-  const lines = useCached(`reference-lines:${familyId}`, () =>
-    api<ReferenceLineView[]>(`/families/${familyId}/reference-lines`));
+/**
+ * Dados de saúde de uma pessoa nas últimas `hours` horas até `anchor`, com os
+ * registros pendentes da fila. A cópia offline é por pessoa e período (não
+ * pelo horário exato), para ser achada ao abrir a tela sem conexão.
+ */
+export function useHealth(familyId: string, personId: string | null, hours: number, anchor: number) {
+  const m = personId ? queries.measurements(familyId, personId, hours, anchor) : null;
+  const s = personId ? queries.symptoms(familyId, personId, hours, anchor) : null;
+  const d = personId ? queries.healthDoses(familyId, personId, hours, anchor) : null;
+  const measurements = useCached(m?.key ?? null, () => m!.fetch());
+  const symptoms = useCached(s?.key ?? null, () => s!.fetch());
+  const doses = useCached(d?.key ?? null, () => d!.fetch());
+  const l = queries.referenceLines(familyId);
+  const lines = useCached(l.key, l.fetch);
+  // Mesmo período escolhido de novo (novo `anchor`, mesma chave): busca de novo.
+  const firstAnchor = useRef(anchor);
+  const { reload: reloadM } = measurements, { reload: reloadS } = symptoms, { reload: reloadD } = doses;
+  useEffect(() => {
+    if (anchor === firstAnchor.current) return;
+    firstAnchor.current = anchor;
+    void reloadM(); void reloadS(); void reloadD();
+  }, [anchor, reloadM, reloadS, reloadD]);
   const outbox = useOutbox(familyId);
 
   const pending = useMemo(() => outbox.filter((i) => i.personId === personId && i.state === "pending"), [outbox, personId]);

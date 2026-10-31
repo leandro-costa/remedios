@@ -38,7 +38,7 @@ export function HealthPage() {
   // Período fixado ao escolher (a chave do cache não muda a cada render).
   const [anchor, setAnchor] = useState(() => Date.now());
   const { from, to } = useMemo(() => ({ from: new Date(anchor - hours * 3_600_000), to: new Date(anchor + 60_000) }), [anchor, hours]);
-  const health = useHealth(family.id, personId, from, to);
+  const health = useHealth(family.id, personId, hours, anchor);
   const person = persons.data?.find((p) => p.id === personId);
 
   if (persons.data && persons.data.length === 0) {
@@ -80,7 +80,7 @@ export function HealthPage() {
 
       {all && (persons.data ?? []).map((p) => (
         <PersonSummary key={p.id} person={p} name={p.userId && p.userId === me?.id ? "Você" : p.displayName}
-          from={from} to={to} onOpen={() => setParams({ pessoa: p.id })} />
+          hours={hours} anchor={anchor} onOpen={() => setParams({ pessoa: p.id })} />
       ))}
       {/* Uma pessoa: gráficos, lembretes e linha do tempo. */}
       {!all && (
@@ -131,11 +131,11 @@ export function HealthPage() {
 }
 
 /** Resumo de uma pessoa em "Todos": sintomas em andamento e a última aferição de cada tipo. */
-function PersonSummary({ person, name, from, to, onOpen }: {
-  person: PersonView; name: string; from: Date; to: Date; onOpen: () => void;
+function PersonSummary({ person, name, hours, anchor, onOpen }: {
+  person: PersonView; name: string; hours: number; anchor: number; onOpen: () => void;
 }) {
   const family = useFamily();
-  const health = useHealth(family.id, person.id, from, to);
+  const health = useHealth(family.id, person.id, hours, anchor);
   const ongoing = health.symptoms.filter((s) => !s.endedAt);
   const latest = new Map<string, MeasurementItem>();
   for (const m of [...health.measurements].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))) {
