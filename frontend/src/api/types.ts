@@ -131,6 +131,8 @@ export interface TreatmentView {
 export interface PrescriptionView {
   id: string;
   personId: string;
+  /** EVENTUAL: o uso eventual da pessoa (id = id da pessoa), só com itens "se necessário". */
+  kind?: "REGULAR" | "EVENTUAL";
   title: string | null;
   prescriber: string | null;
   /** Data da receita (AAAA-MM-DD). */

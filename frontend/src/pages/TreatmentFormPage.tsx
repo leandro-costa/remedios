@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { MedicationView, PastDoses, PersonView, TreatmentKind, TreatmentView } from "../api/types";
+import type { MedicationView, PastDoses, PersonView, PrescriptionView, TreatmentKind, TreatmentView } from "../api/types";
 import { bodyFrom, CatalogSuggestions, draftFromCatalog, emptyDraft, MedicationFields, useCatalog, type MedicationDraft } from "../components/MedicationFields";
 import { normalize } from "../lib/catalog";
 import { describeSubstances, medicationsKey, useMedications } from "./MedicationsPage";
 import { PrescriptionFields, type PrescriptionDraft } from "./PrescriptionFormPage";
-import { prescriptionStatus, prescriptionTitle, prescriptionsKey, usePrescriptions } from "../lib/prescriptions";
+import { EVENTUAL_TITLE, prescriptionStatus, prescriptionTitle, prescriptionsKey, usePrescriptions } from "../lib/prescriptions";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
@@ -97,11 +97,26 @@ export function TreatmentFormPage() {
   const allTreatments = useCached(editing ? null : `treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const [prescriptionId, setPrescriptionId] = useState(params.get("receita") ?? "");
   const [newPrescription, setNewPrescription] = useState<PrescriptionDraft>({ title: "", prescriber: "", prescribedOn: "", notes: "" });
-  const fixedPrescription = params.get("receita") ? prescriptions.data?.find((p) => p.id === params.get("receita")) : undefined;
+  const receitaParam = params.get("receita");
+  // ?receita=<id da pessoa>: o uso eventual dela, que pode ainda não existir no servidor.
+  const eventualPerson = receitaParam ? persons.data?.find((p) => p.id === receitaParam) : undefined;
+  const fixedPrescription: PrescriptionView | undefined = receitaParam
+    ? prescriptions.data?.find((p) => p.id === receitaParam) ?? (eventualPerson ? {
+      id: eventualPerson.id, personId: eventualPerson.id, kind: "EVENTUAL", title: EVENTUAL_TITLE, prescriber: null, prescribedOn: null,
+      notes: null, status: "DRAFT", items: [], createdAt: "", updatedAt: "",
+    } : undefined)
+    : undefined;
+  // No uso eventual só entram remédios "se necessário".
+  const eventualChosen = !editing && Boolean(form.personId) && prescriptionId === form.personId;
+  useEffect(() => {
+    if (eventualChosen && form.kind !== "AS_NEEDED") {
+      setForm((f) => ({ ...f, kind: "AS_NEEDED", endMode: f.endMode === "DAYS" || f.endMode === "DOSES" ? "NONE" : f.endMode }));
+    }
+  }, [eventualChosen, form.kind]);
   useEffect(() => {
     if (fixedPrescription && !form.personId) setForm((f) => ({ ...f, personId: fixedPrescription.personId }));
   }, [fixedPrescription, form.personId]);
-  const openPrescriptions = (prescriptions.data ?? []).filter((p) => p.personId === form.personId
+  const openPrescriptions = (prescriptions.data ?? []).filter((p) => p.personId === form.personId && p.id !== p.personId
     && prescriptionStatus((allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id)) !== "ENDED");
 
   useEffect(() => {
@@ -280,7 +295,7 @@ export function TreatmentFormPage() {
           {!current && (
             <>
               <dt>Receita</dt>
-              <dd>{prescriptionId
+              <dd>{eventualChosen ? EVENTUAL_TITLE : prescriptionId
                 ? prescriptionTitle(prescriptions.data?.find((p) => p.id === prescriptionId), (allTreatments.data ?? []).filter((t) => t.prescriptionId === prescriptionId))
                 : `Nova receita${newPrescription.title.trim() ? `: ${newPrescription.title.trim()}` : ""}`}</dd>
             </>
@@ -363,7 +378,7 @@ export function TreatmentFormPage() {
       )}
 
       {!editing && fixedPrescription && (
-        <p className="muted">Receita: <strong>{prescriptionTitle(fixedPrescription, (allTreatments.data ?? []).filter((t) => t.prescriptionId === fixedPrescription.id))}</strong></p>
+        <p className="muted">Receita: <strong>{eventualChosen ? EVENTUAL_TITLE : prescriptionTitle(fixedPrescription, (allTreatments.data ?? []).filter((t) => t.prescriptionId === fixedPrescription.id))}</strong></p>
       )}
       {!editing && !fixedPrescription && (
         <label>
@@ -378,18 +393,20 @@ export function TreatmentFormPage() {
       {!editing && !fixedPrescription && form.personId && (
         <fieldset className="stack">
           <legend>Receita</legend>
-          {openPrescriptions.length > 0 && (
-            <label>
-              Incluir em
-              <select value={prescriptionId} onChange={(e) => setPrescriptionId(e.target.value)}>
-                <option value="">Nova receita</option>
-                {openPrescriptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {prescriptionTitle(p, (allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id))}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <label>
+            Incluir em
+            <select value={prescriptionId} onChange={(e) => setPrescriptionId(e.target.value)}>
+              <option value="">Nova receita</option>
+              <option value={form.personId}>{EVENTUAL_TITLE} (sem receita, "se necessário")</option>
+              {openPrescriptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {prescriptionTitle(p, (allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id))}
+                </option>
+              ))}
+            </select>
+          </label>
+          {eventualChosen && (
+            <span className="muted small">Para remédios que a pessoa pode tomar quando precisar. Se uma receita ativa tiver o mesmo medicamento, vale a da receita.</span>
           )}
           {!prescriptionId && (
             <details>
@@ -464,8 +481,8 @@ export function TreatmentFormPage() {
           // "Se necessário" não tem término por dias ou doses.
           set({ kind, endMode: kind === "AS_NEEDED" && (form.endMode === "DAYS" || form.endMode === "DOSES") ? "NONE" : form.endMode });
         }}>
-          {(!kindLocked || !asNeeded) && <option value="CONTINUOUS">{TREATMENT_KIND.CONTINUOUS}</option>}
-          {(!kindLocked || !asNeeded) && <option value="OCCASIONAL">{TREATMENT_KIND.OCCASIONAL}</option>}
+          {(!kindLocked || !asNeeded) && !eventualChosen && <option value="CONTINUOUS">{TREATMENT_KIND.CONTINUOUS}</option>}
+          {(!kindLocked || !asNeeded) && !eventualChosen && <option value="OCCASIONAL">{TREATMENT_KIND.OCCASIONAL}</option>}
           {(!kindLocked || asNeeded) && <option value="AS_NEEDED">{TREATMENT_KIND.AS_NEEDED}</option>}
         </select>
         {asNeeded && <span className="muted small">Para remédios dados só quando precisa (ex.: paracetamol se febre). Sem lembretes: registre cada dose quando der.</span>}

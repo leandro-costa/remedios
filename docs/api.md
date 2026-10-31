@@ -181,6 +181,19 @@ junto: um "em caso de dor" pode nunca ser usado e deixaria a receita aberta.
 Receita só com itens "se necessário" vale até o término informado ou até ser
 encerrada.
 
+**Uso eventual.** Cada pessoa tem uma receita fixa, `kind: "EVENTUAL"`, cujo
+`id` é o próprio `id` da pessoa, com os remédios "se necessário" que ela pode
+tomar sem receita em andamento (ex.: paracetamol se febre). Não precisa ser
+criada: o primeiro tratamento cadastrado com `prescriptionId` igual ao id da
+pessoa a cria. Só aceita `kind: "AS_NEEDED"` (outro tipo:
+`422 EVENTUAL_ONLY_AS_NEEDED`), mantém o título "Uso eventual" e não pode ser
+criada pelo `POST /prescriptions` (id igual ao de uma pessoa:
+`422 RESERVED_ID`). As demais receitas têm `kind: "REGULAR"`. Quando uma
+receita ativa da pessoa tem o mesmo medicamento de um item do uso eventual, o
+app esconde o item do uso eventual e vale o da receita; ao encerrar uma
+receita, o app pergunta se os itens "se necessário" dela continuam no uso
+eventual (copiados como novos itens).
+
 ## Tratamentos
 
 | Método | Rota | Descrição |

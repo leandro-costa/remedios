@@ -12,6 +12,8 @@ import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
+import { undecided } from "../lib/eventual";
+import { hiddenEventual, isEventual, prescriptionTitle, usePrescriptions } from "../lib/prescriptions";
 import { useOutbox } from "../hooks/useOutbox";
 import { addDays, formatDay, formatLongDay, formatTime, greeting, sameDay, startOfDay } from "../lib/time";
 import { useFamily, useSession } from "../session";
@@ -75,8 +77,22 @@ export function TodayPage() {
     .filter((o) => o.treatment.kind !== "AS_NEEDED")
     .filter((o) => sameDay(new Date(o.scheduledAt), day))
     .filter((o) => !personId || o.person.id === personId);
-  const asNeeded = (treatments.data ?? []).filter((t) => t.kind === "AS_NEEDED" && t.status === "ACTIVE")
+  // Item do uso eventual com o mesmo medicamento de uma receita ativa fica oculto: vale a receita.
+  const hidden = hiddenEventual(treatments.data ?? []);
+  const asNeeded = (treatments.data ?? []).filter((t) => t.kind === "AS_NEEDED" && t.status === "ACTIVE" && !hidden.has(t.id))
     .filter((t) => !personId || t.personId === personId);
+  // Receitas encerradas nos últimos 7 dias com itens "se necessário" ainda sem decisão.
+  const prescriptions = usePrescriptions();
+  const endedAsk = (prescriptions.data ?? []).filter((p) => p.kind !== "EVENTUAL" && p.id !== p.personId)
+    .filter((p) => !personId || p.personId === personId)
+    .map((p) => {
+      const items = (treatments.data ?? []).filter((t) => t.prescriptionId === p.id && !isEventual(t));
+      const ended = items.length > 0 && items.every((t) => t.status === "ENDED");
+      const lastUpdate = Math.max(0, ...items.map((t) => new Date(t.updatedAt).getTime()));
+      const pending = ended && Date.now() - lastUpdate < 7 * 86_400_000 ? undecided(items, treatments.data ?? []) : [];
+      return { p, items, pending };
+    })
+    .filter((x) => x.pending.length > 0);
   const personName = (id: string) => mine.has(id) ? "Você" : persons.data?.find((p) => p.id === id)?.displayName;
   const review = (agenda.data ?? []).filter((o) => o.status === "REVIEW_REQUIRED").length;
   const treatmentReview = (treatmentConflicts.data ?? []).length;
@@ -255,6 +271,12 @@ export function TodayPage() {
           );
         })}
       </ul>
+      {isToday && endedAsk.map(({ p, items, pending }) => (
+        <Notice key={p.id}>
+          A receita <strong>{prescriptionTitle(p, items)}</strong> terminou. Manter {pending.map((t) => t.name).join(", ")} no uso eventual?{" "}
+          <Link to={`/receitas/${p.id}`}>Decidir</Link>
+        </Notice>
+      ))}
       {isToday && asNeeded.length > 0 && (
         <section className="stack" aria-label="Se necessário">
           <h2>Se necessário</h2>

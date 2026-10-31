@@ -19,6 +19,9 @@ import java.util.UUID;
 @Table(name = "prescription")
 public class Prescription extends PanacheEntityBase {
 
+    /** {@code EVENTUAL}: o uso eventual da pessoa (id = id da pessoa), só com itens "se necessário". */
+    public enum Kind { REGULAR, EVENTUAL }
+
     @Id
     public UUID id;
 
@@ -27,6 +30,10 @@ public class Prescription extends PanacheEntityBase {
 
     @Column(name = "person_id", nullable = false)
     public UUID personId;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(nullable = false)
+    public Kind kind = Kind.REGULAR;
 
     public String title;
 

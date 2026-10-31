@@ -11,7 +11,7 @@ import { isPending } from "../db/cache";
 import { TREATMENT_STATUS } from "../lib/labels";
 import { describeSchedule } from "../lib/schedule";
 import { useFamily, useSession } from "../session";
-import { prescriptionStatus, prescriptionTitle, PRESCRIPTION_STATUS, usePrescriptions } from "../lib/prescriptions";
+import { hiddenEventual, prescriptionStatus, prescriptionTitle, PRESCRIPTION_STATUS, usePrescriptions } from "../lib/prescriptions";
 import { formatDate } from "../lib/time";
 
 // Ativos primeiro e como padrão: encerrados e rascunhos ficam a um toque.
@@ -34,6 +34,7 @@ export function TreatmentsPage() {
     api<TreatmentProgressView[]>(`/families/${family.id}/treatments/progress`));
   const prescriptions = usePrescriptions();
   const progressOf = (id: string) => progress.data?.find((p) => p.treatmentId === id);
+  const hidden = hiddenEventual(treatments.data ?? []);
 
   const list = (treatments.data ?? []).filter((t) => filter === "ALL" || t.status === filter);
   const groups = (persons.data ?? [])
@@ -47,14 +48,15 @@ export function TreatmentsPage() {
       const key = t.prescriptionId ?? t.id;
       byId.set(key, [...(byId.get(key) ?? []), t]);
     }
-    return [...byId.entries()].map(([id, visible]) => {
+    // O uso eventual (id da pessoa) vem primeiro, sempre como grupo.
+    return [...byId.entries()].sort(([a], [b]) => Number(b === items[0]?.personId) - Number(a === items[0]?.personId)).map(([id, visible]) => {
       const prescription = prescriptions.data?.find((p) => p.id === id);
       const all = (treatments.data ?? []).filter((t) => (t.prescriptionId ?? t.id) === id);
       return {
         id, prescription, items: visible, all,
         title: prescriptionTitle(prescription, all),
         status: prescriptionStatus(all),
-        grouped: Boolean(prescription?.title) || all.length > 1,
+        grouped: Boolean(prescription?.title) || all.length > 1 || id === visible[0].personId,
       };
     });
   };
@@ -78,6 +80,7 @@ export function TreatmentsPage() {
                       {isPending(t) && <span className="badge badge-queued"><Icon name="sync" />Aguardando envio</span>}
                       {t.conflictId && <span className="badge badge-review-required"><Icon name="review" />Para conferir</span>}
                     </span>
+                    {hidden.has(t.id) && <span className="muted small">Oculto enquanto a receita com {hidden.get(t.id)!.name} estiver ativa</span>}
                   </span>
                   <span className="item-chevron"><Icon name="chevron" /></span>
                 </Link>

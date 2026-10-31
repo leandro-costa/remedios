@@ -88,6 +88,9 @@ public class PrescriptionService {
         if (!person.active) {
             throw ApiException.unprocessable("PERSON_INACTIVE", "Não é possível cadastrar receita para um perfil inativo.");
         }
+        if (personId.equals(requestedId)) {
+            throw ApiException.unprocessable("RESERVED_ID", "Este identificador é do uso eventual da pessoa.");
+        }
         Instant now = Instant.now();
         Prescription p = new Prescription();
         p.id = ClientIds.choose(requestedId, id -> Prescription.findById(id) != null);
@@ -106,7 +109,11 @@ public class PrescriptionService {
     public Prescription update(UUID familyId, UUID id, PrescriptionData data) {
         Prescription p = get(familyId, id);
         Map<String, Object> before = snapshot(p);
+        String title = p.title;
         apply(p, data);
+        if (p.kind == Prescription.Kind.EVENTUAL) {
+            p.title = title; // o uso eventual mantém o nome
+        }
         p.updatedAt = Instant.now();
         audit.record(familyId, currentUser.id(), PRESCRIPTION, p.id, "PRESCRIPTION_UPDATED", before, snapshot(p), null);
         return p;
