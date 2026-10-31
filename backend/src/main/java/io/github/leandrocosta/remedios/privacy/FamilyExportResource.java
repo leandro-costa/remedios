@@ -9,6 +9,8 @@ import io.github.leandrocosta.remedios.family.FamilySettings;
 import io.github.leandrocosta.remedios.health.Measurement;
 import io.github.leandrocosta.remedios.health.ReferenceLine;
 import io.github.leandrocosta.remedios.health.SymptomRecord;
+import io.github.leandrocosta.remedios.medication.Medication;
+import io.github.leandrocosta.remedios.medication.MedicationResource;
 import io.github.leandrocosta.remedios.occurrence.AdministrationRecord;
 import io.github.leandrocosta.remedios.occurrence.DoseOccurrence;
 import io.github.leandrocosta.remedios.person.Person;
@@ -77,6 +79,8 @@ public class FamilyExportResource {
             return row;
         }).toList());
         data.put("persons", rows(Person.list("familyId", familyId)));
+        data.put("medications", Medication.<Medication>list("familyId", familyId).stream()
+                .map(MedicationResource.MedicationView::of).toList());
         data.put("treatments", rows(Treatment.list("familyId", familyId)));
         data.put("treatmentRevisions", rows(TreatmentRevision.list(
                 "treatmentId in (select t.id from Treatment t where t.familyId = ?1) order by treatmentId, version",

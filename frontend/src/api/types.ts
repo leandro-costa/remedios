@@ -121,6 +121,28 @@ export interface TreatmentView {
   updatedAt: string;
   /** Alteração feita sem conexão aguardando conferência (seção 10.2). */
   conflictId: string | null;
+  /** Medicamento da família (reaproveitável entre tratamentos). */
+  medicationId?: string | null;
+}
+
+/** Substância (princípio ativo) e concentração, como no rótulo. */
+export interface SubstanceView {
+  substance: string;
+  concentration: string | null;
+}
+
+/** Medicamento da família. Só organiza: o app não compara nem sugere doses. */
+export interface MedicationView {
+  id: string;
+  name: string;
+  form: string | null;
+  manufacturer: string | null;
+  /** Categoria da ANVISA (Genérico, Similar, Novo…), quando veio do catálogo. */
+  category: string | null;
+  notes: string | null;
+  substances: SubstanceView[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Andamento do tratamento: total e última previstos (nulos sem término). */
@@ -202,7 +224,11 @@ export interface OccurrenceView {
   late: boolean;
   version: number;
   person: { id: string; displayName: string };
-  treatment: { id: string; name: string; prescribedDose: string; route: string | null; kind?: TreatmentKind };
+  treatment: {
+    id: string; name: string; prescribedDose: string; route: string | null; kind?: TreatmentKind;
+    /** Medicamento da família: o histórico é consolidado por ele. */
+    medicationId?: string | null; medicationName?: string | null;
+  };
   administration: AdministrationView | null;
   statusReason: string | null;
   statusChangedBy: UserRef | null;

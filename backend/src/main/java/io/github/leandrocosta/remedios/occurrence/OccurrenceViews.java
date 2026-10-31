@@ -1,6 +1,7 @@
 package io.github.leandrocosta.remedios.occurrence;
 
 import io.github.leandrocosta.remedios.audit.AuditEvent;
+import io.github.leandrocosta.remedios.medication.Medication;
 import io.github.leandrocosta.remedios.person.Person;
 import io.github.leandrocosta.remedios.schedule.TreatmentSchedule;
 import io.github.leandrocosta.remedios.sync.SyncConflict;
@@ -34,7 +35,9 @@ public class OccurrenceViews {
     public record PersonRef(UUID id, String displayName) {
     }
 
-    public record TreatmentRef(UUID id, String name, String prescribedDose, String route, Treatment.Kind kind) {
+    /** {@code medicationId}/{@code medicationName}: o medicamento da família (histórico consolidado). */
+    public record TreatmentRef(UUID id, String name, String prescribedDose, String route, Treatment.Kind kind,
+            UUID medicationId, String medicationName) {
     }
 
     public record UserRef(UUID id, String displayName) {
@@ -80,6 +83,8 @@ public class OccurrenceViews {
         Instant now = Instant.now();
         Map<UUID, Treatment> treatments = byId(Treatment.class,
                 occurrences.stream().map(o -> o.treatmentId).collect(Collectors.toSet()), t -> t.id);
+        Map<UUID, Medication> medications = byId(Medication.class, treatments.values().stream()
+                .map(t -> t.medicationId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()), m -> m.id);
         Map<UUID, Person> persons = byId(Person.class,
                 treatments.values().stream().map(t -> t.personId).collect(Collectors.toSet()), p -> p.id);
         Map<UUID, TreatmentSchedule> schedules = byId(TreatmentSchedule.class,
@@ -106,7 +111,9 @@ public class OccurrenceViews {
             AdministrationRecord r = records.get(o.id);
             return new OccurrenceView(o.id, o.scheduledAt, status, late, o.version,
                     new PersonRef(p.id, p.displayName),
-                    new TreatmentRef(t.id, t.name, t.prescribedDose, t.route, t.kind),
+                    new TreatmentRef(t.id, t.name, t.prescribedDose, t.route, t.kind, t.medicationId,
+                            t.medicationId == null || !medications.containsKey(t.medicationId) ? t.name
+                                    : medications.get(t.medicationId).name),
                     r == null ? null : administration(r, users),
                     o.statusReason, ref(o.statusChangedBy, users), o.statusChangedAt,
                     claimActive(o, now) ? ref(o.claimedBy, users) : null, claimActive(o, now) ? o.claimedUntil : null,

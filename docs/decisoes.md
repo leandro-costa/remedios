@@ -224,6 +224,22 @@ São parâmetros operacionais, não orientação clínica.
   acrescentado (até 30 dias, numa versão de agenda já encerrada) são criadas,
   e o responsável diz se já foram dadas, como na ativação. Doses registradas
   nunca mudam.
+- **Medicamento é um cadastro da família** (V12), reaproveitado entre
+  tratamentos, com substâncias e concentração do rótulo, forma e fabricante.
+  Os tratamentos que já existiam ganharam um medicamento por nome. Sem
+  `medicationId`, o servidor liga o tratamento ao medicamento de mesmo nome
+  (ou cria), para aparelhos antigos ou registros feitos offline.
+- **Histórico por medicamento, não por tratamento.** O mesmo medicamento em
+  tratamentos diferentes (uma receita com horários e o uso eventual) aparece
+  num histórico único: no Histórico (filtro por medicamento), na tela do
+  medicamento e no cartão "se necessário", cuja última dose e contagem de
+  24 h somam as doses do medicamento para aquela pessoa em todos os
+  tratamentos.
+- **Catálogo da ANVISA pelos dados abertos**, não por consulta ao site (que
+  tem captcha e muda): o servidor importa o arquivo de medicamentos
+  registrados e o aparelho guarda uma cópia (cerca de 12 mil itens, 180 KB
+  compactados), para sugerir nome, substâncias e fabricante ao digitar,
+  inclusive offline. Só sugere: o que fica salvo é o que a pessoa confirmou.
 - **Excluir tratamento cadastrado por engano** é ocultar, não apagar
   (`treatment.deleted_at`, `deleted_by`, `delete_reason`, V11). Só
   administradores, com motivo, em qualquer situação (inclusive encerrado). O

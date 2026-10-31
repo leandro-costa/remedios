@@ -1,4 +1,4 @@
-import type { DoseStatus, Role, TreatmentKind, TreatmentStatus } from "../api/types";
+import type { DoseStatus, OccurrenceView, Role, TreatmentKind, TreatmentStatus } from "../api/types";
 
 export const DOSE_STATUS: Record<DoseStatus, string> = {
   SCHEDULED: "Prevista",
@@ -34,3 +34,10 @@ export const TRAIL_EVENT: Record<string, string> = {
   DOSE_CONFLICT_OPENED: "Registro divergente recebido",
   DOSE_CONFLICT_RESOLVED: "Conferência concluída",
 };
+
+/** "Tylenol", ou "Tylenol (Febre do Gabriel)" quando o tratamento tem outro nome; "· se necessário" no uso eventual. */
+export function doseLabel(o: OccurrenceView): string {
+  const med = o.treatment.medicationName ?? o.treatment.name;
+  const extra = o.treatment.name && o.treatment.name !== med ? ` (${o.treatment.name})` : "";
+  return `${med}${extra}${o.treatment.kind === "AS_NEEDED" ? " · se necessário" : ""}`;
+}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { OccurrenceView, TreatmentView } from "../api/types";
+import { doseLabel } from "../lib/labels";
 import { isPending } from "../db/cache";
 import { useCached } from "../hooks/useCached";
 import { formatAgo, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
@@ -14,16 +15,22 @@ const DAY_MS = 86_400_000;
 /** Até onde buscar doses anteriores (a API aceita no máximo 62 dias por consulta). */
 const LOOKBACK_DAYS = 60;
 
-export const asNeededKey = (treatmentId: string) => `as-needed:${treatmentId}`;
+/**
+ * Doses consolidadas por pessoa e medicamento: as de todos os tratamentos com
+ * o mesmo medicamento (receita ou uso eventual) entram na última dose e na
+ * contagem de 24 h. Sem medicamento (cadastro ainda não enviado), as do tratamento.
+ */
+export const asNeededKey = (t: Pick<TreatmentView, "id" | "personId" | "medicationId">) =>
+  t.medicationId ? `med-history:${t.personId}:${t.medicationId}` : `as-needed:${t.id}`;
 
-/** Doses registradas de um tratamento "se necessário", da mais recente para a mais antiga. */
-export function useAsNeededDoses(treatmentId: string) {
+/** Doses registradas, da mais recente para a mais antiga. */
+export function useAsNeededDoses(t: TreatmentView) {
   const family = useFamily();
-  return useCached(asNeededKey(treatmentId), () => {
+  return useCached(asNeededKey(t), () => {
     const now = Date.now();
     return api<OccurrenceView[]>(`/families/${family.id}/history`, {
       query: {
-        treatmentId, limit: "200",
+        ...(t.medicationId ? { personId: t.personId, medicationId: t.medicationId } : { treatmentId: t.id }), limit: "200",
         from: new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString(),
         to: new Date(now + 3_600_000).toISOString(),
       },
@@ -53,7 +60,7 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
 }) {
   const family = useFamily();
   const { me, deviceId } = useSession();
-  const doses = useAsNeededDoses(treatment.id);
+  const doses = useAsNeededDoses(treatment);
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(true);
   const [at, setAt] = useState("");
@@ -82,7 +89,10 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
     const local: OccurrenceView = {
       id, scheduledAt: administeredAt, status: "ADMINISTERED", late: false, version: 1,
       person: { id: treatment.personId, displayName: personName ?? "" },
-      treatment: { id: treatment.id, name: treatment.name, prescribedDose: treatment.prescribedDose, route: treatment.route, kind: "AS_NEEDED" },
+      treatment: {
+        id: treatment.id, name: treatment.name, prescribedDose: treatment.prescribedDose, route: treatment.route, kind: "AS_NEEDED",
+        medicationId: treatment.medicationId ?? null, medicationName: treatment.name,
+      },
       administration: {
         id, administeredAt, recordedAt, receivedAt: recordedAt, deviceId,
         recordedBy: me ? { id: me.id, displayName: me.displayName } : null, notes: notes.trim() || null,
@@ -97,7 +107,7 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
         body: { id, deviceId, administeredAt, notes: notes.trim() || null, recordedAt },
         label: `Dose de ${treatment.name}`,
         entityId: id,
-        effects: [{ key: asNeededKey(treatment.id), op: "upsert", value: { ...local }, list: true }],
+        effects: [{ key: asNeededKey(treatment), op: "upsert", value: { ...local }, list: true }],
       });
       setOpen(false);
     } catch (e) {
@@ -158,7 +168,7 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
 
       {!compact && given.length > 0 && (
         <>
-          <h3 className="small">Doses registradas</h3>
+          <h3 className="small">Doses registradas deste medicamento</h3>
           <ul className="doses">
             {given.slice(0, 10).map((o) => (
               <li key={o.id} className="dose-row">
@@ -166,7 +176,8 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
                   <span className="dose-main">
                     <strong>{formatWhen(o.scheduledAt)}</strong>
                     <span className="muted small">
-                      {o.administration?.recordedBy?.displayName ?? ""}{o.administration?.notes ? ` · ${o.administration.notes}` : ""}
+                      {[o.treatment.id !== treatment.id ? doseLabel(o) : null, o.administration?.recordedBy?.displayName,
+                        o.administration?.notes].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                   {isPending(o) && <span className="dose-side"><span className="badge badge-queued">Aguardando envio</span></span>}

@@ -41,6 +41,7 @@ export function TreatmentsPage() {
     <div className="page">
       <PageHeader title="Tratamentos" subtitle="Medicamentos e horários de cada pessoa"
         action={<Link to="/tratamentos/novo" className="round-btn" aria-label="Novo tratamento" title="Novo tratamento"><Icon name="plus" /></Link>} />
+      <Link to="/medicamentos" className="link">Medicamentos cadastrados →</Link>
       {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
       <div className="chips" role="group" aria-label="Filtrar por situação">
         {FILTERS.map((f) => (

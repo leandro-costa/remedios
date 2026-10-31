@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, ApiError, errorMessage } from "../api/client";
-import type { PastDoses, PersonView, TreatmentKind, TreatmentView } from "../api/types";
+import type { MedicationView, PastDoses, PersonView, TreatmentKind, TreatmentView } from "../api/types";
+import { bodyFrom, CatalogSuggestions, draftFromCatalog, emptyDraft, MedicationFields, useCatalog, type MedicationDraft } from "../components/MedicationFields";
+import { normalize } from "../lib/catalog";
+import { describeSubstances, medicationsKey, useMedications } from "./MedicationsPage";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
@@ -38,6 +41,9 @@ interface Form {
   schedule: ScheduleForm;
   effectiveFrom: string;
   reason: string;
+  /** Medicamento da família escolhido; nulo = cadastrar um novo com {@code newMedication}. */
+  medicationId: string | null;
+  newMedication: MedicationDraft | null;
 }
 
 function emptyForm(): Form {
@@ -46,7 +52,7 @@ function emptyForm(): Form {
     personId: "", name: "", kind: "CONTINUOUS", prescribedDose: "", route: "", instructions: "",
     startAt: toLocalInput(startOfDay(now)), endMode: "NONE", endAt: "", days: "", doses: "",
     schedule: emptyScheduleForm(deviceTimezone()),
-    effectiveFrom: toLocalInput(now), reason: "",
+    effectiveFrom: toLocalInput(now), reason: "", medicationId: null, newMedication: null,
   };
 }
 
@@ -57,7 +63,7 @@ function formFrom(t: TreatmentView): Form {
     endMode: t.doseCount ? "DOSES" : t.endAt ? "DATE" : "NONE",
     endAt: t.endAt ? toLocalInput(new Date(t.endAt)) : "", days: "", doses: t.doseCount ? String(t.doseCount) : "",
     schedule: formFromRule(t.schedule, deviceTimezone()),
-    effectiveFrom: toLocalInput(new Date()), reason: "",
+    effectiveFrom: toLocalInput(new Date()), reason: "", medicationId: t.medicationId ?? null, newMedication: null,
   };
 }
 
@@ -78,6 +84,9 @@ export function TreatmentFormPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const medications = useMedications();
+  const catalog = useCatalog();
+  const [typing, setTyping] = useState(false);
   /** Início antecipado num tratamento ativo: as doses do período acrescentado já foram dadas? */
   const [pastDoses, setPastDoses] = useState<PastDoses | null>(null);
 
@@ -121,10 +130,37 @@ export function TreatmentFormPage() {
     return null;
   }
 
+  /** Medicamento do tratamento: o escolhido, um da família com o mesmo nome ou um novo (criado antes, na fila). */
+  async function medicationFor(): Promise<string> {
+    if (form.medicationId) return form.medicationId;
+    const same = (medications.data ?? []).find((m) => normalize(m.name) === normalize(form.name));
+    if (same) return same.id;
+    const draft = { ...(form.newMedication ?? emptyDraft()), name: form.name.trim() };
+    const med = bodyFrom(draft);
+    const now = new Date().toISOString();
+    const created: MedicationView = { ...med, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    await mutate({
+      familyId: family.id, method: "POST", path: `/families/${family.id}/medications`,
+      body: { ...med, id: created.id }, label: `Novo medicamento: ${med.name}`, entityId: created.id,
+      effects: [{ key: medicationsKey(family.id), op: "upsert", list: true, value: { ...created } }],
+    });
+    return created.id;
+  }
+
   async function save() {
     setBusy(true);
     setError(null);
+    let medicationId: string;
+    try {
+      medicationId = await medicationFor();
+    } catch (e) {
+      setError(errorMessage(e));
+      setReviewing(false);
+      setBusy(false);
+      return;
+    }
     const body = {
+      medicationId,
       name: form.name.trim(), kind: form.kind, prescribedDose: form.prescribedDose.trim(),
       route: form.route.trim() || null, instructions: form.instructions.trim() || null,
       startAt: fromLocalInput(form.startAt),
@@ -178,6 +214,9 @@ export function TreatmentFormPage() {
   }
 
   const person = persons.data?.find((p) => p.id === form.personId);
+  const selected = form.medicationId ? medications.data?.find((m) => m.id === form.medicationId) : undefined;
+  const familyMatches = (medications.data ?? [])
+    .filter((m) => normalize(m.name).includes(normalize(form.name)) && m.id !== form.medicationId).slice(0, 5);
   const count = form.endMode === "DAYS" || form.endMode === "DOSES" ? doseCount() : null;
   const plan = reviewing && !asNeeded ? planCourse(ruleFromForm(form.schedule), new Date(form.startAt), {
     doseCount: count, endAt: form.endMode === "DATE" && form.endAt ? new Date(form.endAt) : null,
@@ -210,7 +249,13 @@ export function TreatmentFormPage() {
         <ScreenBar title="Confira antes de salvar" onBack={() => setReviewing(false)} />
         <dl className="facts card">
           <dt>Pessoa</dt><dd>{person?.displayName ?? "—"}</dd>
-          <dt>Medicamento</dt><dd>{form.name}</dd>
+          <dt>Medicamento</dt>
+          <dd>
+            {form.name}
+            {(selected || form.newMedication) && (
+              <><br /><span className="muted small">{describeSubstances(selected ?? bodyFrom(form.newMedication!))}</span></>
+            )}
+          </dd>
           <dt>Dose (da prescrição)</dt><dd>{form.prescribedDose}</dd>
           {form.route && (<><dt>Via</dt><dd>{form.route}</dd></>)}
           {form.instructions && (<><dt>Instruções</dt><dd>{form.instructions}</dd></>)}
@@ -293,8 +338,50 @@ export function TreatmentFormPage() {
       )}
       <label>
         Medicamento
-        <input value={form.name} onChange={(e) => set({ name: e.target.value })} required maxLength={200} />
+        <input value={form.name} required maxLength={200} placeholder="Ex.: Tylenol, Amoxicilina"
+          onFocus={() => setTyping(true)} onBlur={() => setTimeout(() => setTyping(false), 150)}
+          onChange={(e) => {
+            const same = (medications.data ?? []).find((m) => normalize(m.name) === normalize(e.target.value));
+            set({ name: e.target.value, medicationId: same?.id ?? null });
+          }} />
+        <span className="muted small">Escolha um medicamento já cadastrado ou digite um novo: o app sugere do catálogo da ANVISA.</span>
       </label>
+      {typing && form.name.trim().length >= 2 && (
+        <>
+          {familyMatches.length > 0 && (
+            <div className="suggestions" role="group" aria-label="Medicamentos da família">
+              <span className="muted small">Já cadastrados</span>
+              {familyMatches.map((m) => (
+                <button key={m.id} type="button" className="suggestion" onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { set({ name: m.name, medicationId: m.id, newMedication: null }); setTyping(false); }}>
+                  <strong>{m.name}</strong>
+                  <span className="muted small">{[describeSubstances(m), m.form].filter(Boolean).join(" · ")}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <CatalogSuggestions items={catalog} query={form.name} onPick={(item) => {
+            const draft = draftFromCatalog(item, form.newMedication ?? undefined);
+            const same = (medications.data ?? []).find((m) => normalize(m.name) === normalize(draft.name));
+            set({ name: draft.name, medicationId: same?.id ?? null, newMedication: same ? null : draft });
+            setTyping(false);
+          }} />
+        </>
+      )}
+      {selected && (
+        <p className="muted small" data-testid="medication-summary">
+          {[describeSubstances(selected), selected.form, selected.manufacturer].filter(Boolean).join(" · ") || "Medicamento cadastrado"}
+        </p>
+      )}
+      {!selected && form.name.trim() && (
+        <fieldset className="stack card">
+          <legend>Novo medicamento: {form.name.trim()}</legend>
+          <MedicationFields value={form.newMedication ?? emptyDraft(form.name)} catalog={catalog}
+            familySubstances={(medications.data ?? []).flatMap((m) => m.substances.map((s) => s.substance))}
+            onChange={(newMedication) => set({ newMedication })} />
+          <span className="muted small">Fica salvo em Medicamentos para usar em outros tratamentos.</span>
+        </fieldset>
+      )}
       <label>
         Dose conforme a prescrição
         <input value={form.prescribedDose} onChange={(e) => set({ prescribedDose: e.target.value })} required maxLength={500}

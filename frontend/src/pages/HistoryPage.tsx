@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
-import type { MemberView, OccurrenceView, PersonView, TreatmentView } from "../api/types";
+import type { MemberView, OccurrenceView, PersonView } from "../api/types";
 import { Avatar } from "../components/Avatar";
 import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
@@ -9,6 +9,8 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
 import { addDays, formatTime, formatWhen, startOfDay } from "../lib/time";
 import { useFamily } from "../session";
+import { useMedications } from "./MedicationsPage";
+import { doseLabel } from "../lib/labels";
 
 const PERIODS = [
   { days: 1, label: "Hoje" },
@@ -20,18 +22,20 @@ const PERIODS = [
 export function HistoryPage() {
   const family = useFamily();
   const [personId, setPersonId] = useState("");
-  const [treatmentId, setTreatmentId] = useState("");
+  const [medicationId, setMedicationId] = useState("");
   const [recordedBy, setRecordedBy] = useState("");
   const [days, setDays] = useState(7);
 
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
-  const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
+  const medications = useMedications();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
   const to = addDays(startOfDay(new Date()), 1);
   const from = addDays(to, -days);
-  const key = `history:${family.id}:${days}:${personId}:${treatmentId}:${recordedBy}`;
+  const key = `history:${family.id}:${days}:${personId}:${medicationId}:${recordedBy}`;
+  // Por medicamento, não por tratamento: as doses do mesmo medicamento em
+  // receitas diferentes (ou no uso eventual) aparecem juntas.
   const history = useCached(key, () => api<OccurrenceView[]>(`/families/${family.id}/history`, {
-    query: { from: from.toISOString(), to: to.toISOString(), personId, treatmentId, recordedBy, limit: 300 },
+    query: { from: from.toISOString(), to: to.toISOString(), personId, medicationId, recordedBy, limit: 300 },
   }));
 
   return (
@@ -46,11 +50,11 @@ export function HistoryPage() {
           </select>
         </label>
         <label>
-          Tratamento
-          <select value={treatmentId} onChange={(e) => setTreatmentId(e.target.value)}>
+          Medicamento
+          <select value={medicationId} onChange={(e) => setMedicationId(e.target.value)}>
             <option value="">Todos</option>
-            {(treatments.data ?? []).filter((t) => !personId || t.personId === personId)
-              .map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {[...(medications.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+              .map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </label>
         <label>
@@ -81,7 +85,7 @@ export function HistoryPage() {
                   <strong>{formatWhen(o.administration?.administeredAt ?? o.statusChangedAt ?? o.scheduledAt)}</strong>
                   <StatusBadge status={o.status} />
                 </span>
-                <span>{o.person.displayName} · {o.treatment.name}</span>
+                <span>{o.person.displayName} · {doseLabel(o)}</span>
                 <span className="muted small">
                   Previsto {formatTime(o.scheduledAt)} · Registrado por {o.administration?.recordedBy?.displayName ?? o.statusChangedBy?.displayName ?? "—"}
                   {o.administration ? ` às ${formatTime(o.administration.recordedAt)}` : ""}
@@ -95,3 +99,4 @@ export function HistoryPage() {
     </div>
   );
 }
+

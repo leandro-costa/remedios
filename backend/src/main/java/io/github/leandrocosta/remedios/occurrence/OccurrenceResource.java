@@ -157,8 +157,9 @@ public class OccurrenceResource {
     @Path("/history")
     public List<OccurrenceView> history(@PathParam("familyId") UUID familyId, @QueryParam("from") Instant from,
             @QueryParam("to") Instant to, @QueryParam("personId") UUID personId,
-            @QueryParam("treatmentId") UUID treatmentId, @QueryParam("recordedBy") UUID recordedBy,
-            @QueryParam("limit") @DefaultValue("200") int limit) {
-        return views.of(occurrences.history(familyId, from, to, personId, treatmentId, recordedBy, limit));
+            @QueryParam("treatmentId") UUID treatmentId, @QueryParam("medicationId") UUID medicationId,
+            @QueryParam("recordedBy") UUID recordedBy, @QueryParam("limit") @DefaultValue("200") int limit) {
+        return views.of(occurrences.history(familyId, from, to, personId, treatmentId, medicationId, recordedBy,
+                limit));
     }
 }
