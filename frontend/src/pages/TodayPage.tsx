@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type TouchEvent } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView, TreatmentView } from "../api/types";
 import { AgendaRange, move, startOfMonth, startOfWeek, type AgendaView } from "../components/AgendaRange";
@@ -22,8 +22,21 @@ import { useFamily, useSession } from "../session";
 export function TodayPage() {
   const family = useFamily();
   const { me } = useSession();
-  const [day, setDay] = useState(() => startOfDay(new Date()));
-  const [view, setView] = useState<AgendaView>("day");
+  // Dia, visão e pessoa ficam no endereço: ao abrir uma dose e voltar, a tela
+  // continua como estava (ex.: na semana passada, filtrada por uma pessoa).
+  const [params, setParams] = useSearchParams();
+  const day = parseDay(params.get("dia")) ?? startOfDay(new Date());
+  const view: AgendaView = params.get("visao") === "semana" ? "week" : params.get("visao") === "mes" ? "month" : "day";
+  const personId = params.get("pessoa");
+  const update = (patch: { day?: Date; view?: AgendaView; personId?: string | null }) => {
+    const next = new URLSearchParams(params);
+    const set = (key: string, value: string | null) => (value ? next.set(key, value) : next.delete(key));
+    if (patch.day) set("dia", sameDay(patch.day, new Date()) ? null : dayKey(patch.day));
+    if (patch.view) set("visao", patch.view === "week" ? "semana" : patch.view === "month" ? "mes" : null);
+    if (patch.personId !== undefined) set("pessoa", patch.personId);
+    setParams(next, { replace: true });
+  };
+  const setDay = (d: Date) => update({ day: d });
   // Arrastar para o lado muda de dia (ou de semana, ou de mês).
   const touch = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: TouchEvent) => {
@@ -39,7 +52,6 @@ export function TodayPage() {
     const dy = e.changedTouches[0].clientY - start.y;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setDay(move(day, view, dx < 0 ? 1 : -1));
   };
-  const [personId, setPersonId] = useState<string | null>(null);
   const [onTime, setOnTime] = useState<{ occurrence: OccurrenceView; now: boolean } | null>(null);
 
   // Busca de um dia antes a três depois: a cópia offline cobre os próximos dias.
@@ -145,7 +157,7 @@ export function TodayPage() {
         <div className="segmented view-switch" role="radiogroup" aria-label="Visão">
           {(["day", "week", "month"] as const).map((v) => (
             <button key={v} type="button" role="radio" aria-checked={view === v} className={view === v ? "on" : ""}
-              onClick={() => setView(v)}>{v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}</button>
+              onClick={() => update({ view: v })}>{v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}</button>
           ))}
         </div>
       </section>
@@ -199,9 +211,9 @@ export function TodayPage() {
       )}
 
       <div className="chips" role="group" aria-label="Filtrar por pessoa">
-        <button className={`chip ${personId === null ? "chip-on" : ""}`} onClick={() => setPersonId(null)}>Todos</button>
+        <button className={`chip ${personId === null ? "chip-on" : ""}`} onClick={() => update({ personId: null })}>Todos</button>
         {(persons.data ?? []).map((p) => (
-          <button key={p.id} className={`chip ${personId === p.id ? "chip-on" : ""}`} onClick={() => setPersonId(p.id)}>
+          <button key={p.id} className={`chip ${personId === p.id ? "chip-on" : ""}`} onClick={() => update({ personId: p.id })}>
             {p.userId && p.userId === me?.id ? "Você" : p.displayName}
           </button>
         ))}
@@ -209,7 +221,7 @@ export function TodayPage() {
 
       {view !== "day" && (
         <AgendaRange view={view} day={day} personId={personId} queued={new Set(queued.keys())} who={who}
-          onOpenDay={(d) => { setDay(startOfDay(d)); setView("day"); }} />
+          onOpenDay={(d) => update({ day: startOfDay(d), view: "day" })} />
       )}
       {view === "day" && (
         <>
@@ -285,4 +297,15 @@ function capitalize(text: string): string {
 /** "27 out" */
 function shortDate(date: Date): string {
   return date.toLocaleDateString("pt-BR", { day: "numeric", month: "short" }).replace(".", "");
+}
+
+/** "2026-10-31" no fuso do aparelho. */
+function dayKey(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDay(value: string | null): Date | null {
+  const m = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
