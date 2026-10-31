@@ -457,3 +457,48 @@ h2.eyebrow { margin: 0; }
   display: flex; align-items: center; gap: 0.6rem; min-height: 48px; padding: 0.5rem 0.4rem;
   color: inherit; text-decoration: none;
 }
+
+/* Agenda: semana e mês. */
+.view-switch { margin: 0.4rem 0 0.2rem; }
+.hero .segmented { border-color: rgba(255, 255, 255, 0.25); }
+.hero .segmented button { background: transparent; color: var(--ink-text); }
+.hero .segmented button.on { background: var(--accent); color: var(--ink); }
+.today-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem; min-height: 44px; padding: 0 1rem; margin-top: 0.35rem;
+  border: 0; border-radius: 999px; background: var(--accent); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}
+.week { list-style: none; padding: 0; margin: 0.6rem 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.week-day { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.3rem 0.4rem; }
+.week-day.is-today { outline: 2px solid var(--primary); }
+.week-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; width: 100%; min-height: 48px; padding: 0.5rem 0.6rem;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.week-head .muted { flex-basis: 100%; margin-left: 1.3rem; }
+.week-doses { list-style: none; padding: 0; margin: 0 0 0.3rem; }
+.week-dose {
+  display: flex; align-items: center; gap: 0.75rem; min-height: 48px; padding: 0.4rem 0.6rem;
+  color: inherit; text-decoration: none; border-top: 1px solid var(--border);
+}
+.week-dose .dose-main { flex: 1; min-width: 0; }
+.day-dot { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--border); flex: none; }
+.month-day.tone-done { background: var(--ok-soft); }
+.tone-done.day-dot { background: var(--ok); }
+.tone-attention.day-dot { background: var(--late); }
+.tone-review.day-dot { background: var(--review); }
+.tone-upcoming.day-dot { background: var(--warn); }
+.month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.3rem; }
+.month-weekday { text-align: center; font-weight: 700; color: var(--muted); font-size: 0.85rem; }
+.month-day {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; min-height: 48px;
+  border: 0; border-radius: 12px; background: var(--bg); color: inherit; font: inherit; cursor: pointer;
+}
+.month-day.out { color: var(--muted); font-weight: 400; }
+.month-day.is-today { outline: 2px solid var(--primary); }
+.month-day.tone-attention { background: var(--late-soft); color: var(--late); }
+.month-day.tone-review { background: var(--review-soft); color: var(--review); }
+.month-day.tone-upcoming { background: var(--warn-soft); color: var(--warn); }
+.month-day.tone-done { color: var(--ok); }
+.month-count { font-size: 0.7rem; font-weight: 700; }
+.legend-list { list-style: none; padding: 0; margin: 0.8rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.85rem; }
+.legend-list li { display: inline-flex; align-items: center; gap: 0.4rem; }
