@@ -55,7 +55,9 @@ existe, como é verificado e o que falta decidir antes da produção.
   conta.
 - **Limite de pedidos por IP:** atrás de um proxy reverso, todos os pedidos
   podem chegar com o mesmo IP. Configure `real_ip` no nginx ou ajuste o
-  limite.
+  limite. Só 127.0.0.1 e ::1 (quem roda dentro do próprio contêiner `web`, como os
+  testes de ponta a ponta) fica fora do limite; um cliente de fora nunca
+  chega com esse endereço.
 - **Revogação de sessão do Firebase:** um token já emitido vale até expirar
   (1 h). Veja [`firebase.md`](firebase.md).
 - **Respostas guardadas para reenvio** (`client_operation`) contêm os mesmos

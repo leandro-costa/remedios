@@ -1,15 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 import { activate, localTime, newUser, run } from "./helpers";
 
-/** Arrasta o dedo na tela Hoje (para a esquerda: avança). */
-async function swipe(p: Page, direction: "left" | "right") {
-  await p.evaluate((dir) => {
+/** Arrasta o dedo na tela Hoje (para a esquerda: avança), `times` vezes seguidas, sem esperar a tela. */
+async function swipe(p: Page, direction: "left" | "right", times = 1) {
+  await p.evaluate(([dir, n]) => {
     const el = document.querySelector(".page-today")!;
     const at = (x: number) => new Touch({ identifier: 1, target: el, clientX: x, clientY: 400 });
     const [a, b] = dir === "left" ? [320, 80] : [80, 320];
-    el.dispatchEvent(new TouchEvent("touchstart", { touches: [at(a)], changedTouches: [at(a)], bubbles: true }));
-    el.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [at(b)], bubbles: true }));
-  }, direction);
+    for (let i = 0; i < n; i++) {
+      el.dispatchEvent(new TouchEvent("touchstart", { touches: [at(a)], changedTouches: [at(a)], bubbles: true }));
+      el.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [at(b)], bubbles: true }));
+    }
+  }, [direction, times] as const);
 }
 
 test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ browser }) => {
@@ -38,8 +40,8 @@ test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ br
   // Arrastar para o lado muda o dia; o atalho volta para hoje.
   await swipe(p, "left");
   await expect(p.getByRole("heading", { name: "Amanhã" })).toBeVisible();
-  await swipe(p, "right");
-  await swipe(p, "right");
+  // Dois arrastes seguidos, antes de a tela atualizar: cada um conta.
+  await swipe(p, "right", 2);
   await expect(p.getByRole("heading", { name: "Ontem" })).toBeVisible();
   await p.getByRole("button", { name: "Voltar para hoje" }).click();
   await expect(p.getByRole("heading", { name: "Hoje" })).toBeVisible();
@@ -54,6 +56,10 @@ test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ br
   await p.getByRole("button", { name: "Gabriel", exact: true }).click();
   await p.locator(".week-day.is-today").getByRole("link", { name: /Vitamina D/ }).click();
   await expect(p.getByRole("heading", { name: "Dose", exact: true })).toBeVisible();
+  // Da dose, o tratamento que a gerou.
+  await p.getByRole("link", { name: "Ver o tratamento desta dose →" }).click();
+  await expect(p.getByRole("heading", { name: /Vitamina D/ })).toBeVisible();
+  await p.goBack();
   await p.goBack();
   await expect(p.getByRole("heading", { name: "Semana" })).toBeVisible();
   await expect(p.getByRole("radio", { name: "Semana" })).toHaveAttribute("aria-checked", "true");
