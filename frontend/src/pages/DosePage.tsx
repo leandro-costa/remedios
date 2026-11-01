@@ -60,6 +60,10 @@ export function DosePage() {
         <div><dt>Dose</dt><dd>{occurrence.treatment.prescribedDose} <span className="muted small">(conforme cadastro)</span></dd></div>
         {occurrence.treatment.route && <div><dt>Via</dt><dd>{occurrence.treatment.route}</dd></div>}
       </dl>
+      <p>
+        {/* O tratamento que gerou esta dose: agenda, dose prescrita, receita e alterações. */}
+        <Link to={`/tratamentos/${occurrence.treatment.id}`} className="link">Ver o tratamento desta dose →</Link>
+      </p>
 
       {queued && (
         <Notice tone="warn">
