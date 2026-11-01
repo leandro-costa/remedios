@@ -147,6 +147,8 @@ a { color: var(--primary); }
 .actions + .actions { margin-top: 0; }
 .actions .btn-danger { grid-column: 1 / -1; }
 .btn.btn-danger { color: var(--error); }
+/* Fim de formulário ou confirmação: principal primeiro, botões do mesmo tamanho. */
+.form-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.6rem; margin-top: 0.5rem; }
 .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .row.wrap, .wrap { flex-wrap: wrap; }
 .row.between, .between { justify-content: space-between; }

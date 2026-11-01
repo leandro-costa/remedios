@@ -143,7 +143,7 @@ export function AsNeededCard({ treatment, personName, compact = false }: {
             <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} placeholder="Ex.: febre de 38,4 °C" />
           </label>
           <p className="muted small">Dose: {treatment.prescribedDose}, como na receita. Confira antes de dar.</p>
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || (!now && !at)} onClick={() => void record()}>Confirmar dose</button>
             <button className="btn" onClick={() => setOpen(false)}>Cancelar</button>
           </div>

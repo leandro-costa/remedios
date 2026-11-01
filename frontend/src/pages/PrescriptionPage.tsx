@@ -230,7 +230,7 @@ export function PrescriptionPage() {
               ))}
             </fieldset>
           )}
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || (deleting && !reason.trim())}
               onClick={() => void (pending ? change(pending) : remove())}>{pending ? "Confirmar" : "Excluir receita"}</button>
             <button className="btn" onClick={() => { setPending(null); setDeleting(false); }}>Cancelar</button>

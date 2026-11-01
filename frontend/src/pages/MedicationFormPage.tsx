@@ -82,7 +82,7 @@ export function MedicationFormPage() {
         Observações <span className="muted small">(opcional)</span>
         <textarea value={draft.notes} maxLength={2000} rows={2} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
       </label>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !draft.name.trim()}>Salvar</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>

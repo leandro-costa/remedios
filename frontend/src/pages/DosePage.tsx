@@ -325,7 +325,7 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
   const [error, setError] = useState<string | null>(null);
 
   if (!openForm) {
-    return <button className="btn" onClick={() => setOpenForm(true)}>Corrigir registro</button>;
+    return <div className="actions"><button className="btn" onClick={() => setOpenForm(true)}>Corrigir registro</button></div>;
   }
   async function save() {
     setBusy(true);
@@ -379,7 +379,7 @@ function Correction({ occurrence, onDone }: { occurrence: OccurrenceView; onDone
         <input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000} />
       </label>
       <p className="muted small">O registro anterior é preservado no histórico.</p>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void save()}>Salvar correção</button>
         <button className="btn" onClick={() => setOpenForm(false)}>Cancelar</button>
       </div>
@@ -448,7 +448,7 @@ function ConflictReview({ detail, onDone }: { detail: OccurrenceDetail; onDone: 
         Como foi decidido? <span className="muted small">(obrigatório)</span>
         <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} placeholder="Ex.: conversamos e foi dada uma vez" />
       </label>
-      <div className="row wrap">
+      <div className="form-actions">
         {occurrence.administration && (
           <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void resolve("ADMINISTERED")}>
             Manter o registro atual

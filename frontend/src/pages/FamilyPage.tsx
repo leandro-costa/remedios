@@ -332,7 +332,7 @@ function Defaults({ isAdmin }: { isAdmin: boolean }) {
       </div>
       {isAdmin && !draft && <button className="btn" onClick={() => setDraft(s)}>Editar padrões</button>}
       {draft && (
-        <div className="row">
+        <div className="form-actions">
           <button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => {
             const { version, ...values } = draft;
             await mutate({

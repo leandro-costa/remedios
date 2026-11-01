@@ -181,7 +181,7 @@ export function TreatmentDetailPage() {
               </label>
             </fieldset>
           )}
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || (askPast && !past)} onClick={() => void change(pending)}>Confirmar</button>
             <button className="btn" onClick={() => { setPending(null); setPast(null); }}>Cancelar</button>
           </div>
@@ -286,7 +286,7 @@ function DeleteTreatment({ treatment: t }: { treatment: TreatmentView }) {
         <input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000}
           placeholder="Ex.: cadastrado na pessoa errada" />
       </label>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void remove()}>Excluir tratamento</button>
         <button className="btn" onClick={() => setOpen(false)}>Cancelar</button>
       </div>

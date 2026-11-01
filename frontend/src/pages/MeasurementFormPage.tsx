@@ -124,7 +124,7 @@ export function MeasurementFormPage() {
         Observações <span className="muted small">(opcional)</span>
         <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
       </label>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !personId}>Salvar aferição</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>

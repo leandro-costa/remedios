@@ -64,9 +64,9 @@ export function MeasurementDetailPage() {
         {m.voidedAt && (<><dt>Excluída</dt><dd>{m.voidedBy?.displayName}: {m.voidReason}</dd></>)}
       </dl>
       {!m.voidedAt && mode === "view" && (
-        <div className="row wrap">
+        <div className="actions">
           <button className="btn" onClick={startCorrection}>Corrigir</button>
-          <button className="btn" onClick={() => setMode("discard")}>Excluir</button>
+          <button className="btn btn-danger" onClick={() => setMode("discard")}>Excluir</button>
         </div>
       )}
       {mode === "correct" && (
@@ -79,7 +79,7 @@ export function MeasurementDetailPage() {
           <label>Horário da medida <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></label>
           <label>Motivo <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></label>
           <p className="muted small">O registro original fica guardado no histórico.</p>
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void run(() => {
               const v = parseNumber(value);
               if (v === null) throw new Error("Valor inválido.");
@@ -102,7 +102,7 @@ export function MeasurementDetailPage() {
         <section className="card stack">
           <h2>Excluir aferição</h2>
           <label>Motivo <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} placeholder="Ex.: pessoa errada" /></label>
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void run(() => mutate({
               familyId: family.id, method: "POST", path: `/families/${family.id}/measurements/${m.id}/void`, body: { reason: reason.trim() },
               label: `Exclusão de aferição (${info.label})`,
@@ -187,7 +187,7 @@ export function SymptomDetailPage() {
       {discarding ? (
         <section className="card stack">
           <label>Motivo da exclusão <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></label>
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void (async () => {
               setBusy(true);
               try {
