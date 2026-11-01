@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import type { OccurrenceView, PersonView, TreatmentConflictView, TreatmentView } from "../api/types";
@@ -29,15 +29,26 @@ export function TodayPage() {
   const day = parseDay(params.get("dia")) ?? startOfDay(new Date());
   const view: AgendaView = params.get("visao") === "semana" ? "week" : params.get("visao") === "mes" ? "month" : "day";
   const personId = params.get("pessoa");
+  // Mudança ainda não aplicada ao endereço: dois toques ou arrastes seguidos
+  // partem do resultado do anterior, não do que estava na tela.
+  const pending = useRef<URLSearchParams | null>(null);
+  useEffect(() => { pending.current = null; }, [params]);
   const update = (patch: { day?: Date; view?: AgendaView; personId?: string | null }) => {
-    const next = new URLSearchParams(params);
+    const next = new URLSearchParams(pending.current ?? params);
     const set = (key: string, value: string | null) => (value ? next.set(key, value) : next.delete(key));
     if (patch.day) set("dia", sameDay(patch.day, new Date()) ? null : dayKey(patch.day));
     if (patch.view) set("visao", patch.view === "week" ? "semana" : patch.view === "month" ? "mes" : null);
     if (patch.personId !== undefined) set("pessoa", patch.personId);
+    pending.current = next;
     setParams(next, { replace: true });
   };
-  const setDay = (d: Date) => update({ day: d });
+  /** Avança ou volta um dia (ou semana, ou mês) a partir do dia mais recente escolhido. */
+  const step = (by: 1 | -1) => {
+    const current = pending.current ?? params;
+    const from = parseDay(current.get("dia")) ?? startOfDay(new Date());
+    const v: AgendaView = current.get("visao") === "semana" ? "week" : current.get("visao") === "mes" ? "month" : "day";
+    update({ day: move(from, v, by) });
+  };
   // Arrastar para o lado muda de dia (ou de semana, ou de mês).
   const touch = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: TouchEvent) => {
@@ -51,7 +62,7 @@ export function TodayPage() {
     if (!start) return;
     const dx = e.changedTouches[0].clientX - start.x;
     const dy = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setDay(move(day, view, dx < 0 ? 1 : -1));
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) step(dx < 0 ? 1 : -1);
   };
   const [onTime, setOnTime] = useState<{ occurrence: OccurrenceView; now: boolean } | null>(null);
 
@@ -137,13 +148,13 @@ export function TodayPage() {
           <div className="hero-day">
             <h1>{dayTitle}</h1>
             <div className="day-nav">
-              <button className="icon-btn" aria-label={unit[0]} onClick={() => setDay(move(day, view, -1))}>‹</button>
+              <button className="icon-btn" aria-label={unit[0]} onClick={() => step(-1)}>‹</button>
               <span className="hero-muted">{subtitle}</span>
-              <button className="icon-btn" aria-label={unit[1]} onClick={() => setDay(move(day, view, 1))}>›</button>
+              <button className="icon-btn" aria-label={unit[1]} onClick={() => step(1)}>›</button>
             </div>
             <SyncStatus familyId={family.id} fresh={agenda.fresh} savedAt={agenda.savedAt} />
             {!showingNow && (
-              <button className="today-chip" aria-label="Voltar para hoje" onClick={() => setDay(startOfDay(new Date()))}>
+              <button className="today-chip" aria-label="Voltar para hoje" onClick={() => update({ day: startOfDay(new Date()) })}>
                 <Icon name="back" />Hoje
               </button>
             )}
