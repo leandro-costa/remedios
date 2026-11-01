@@ -12,6 +12,7 @@ import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
+import { ALL, recall, remember, resolvePerson } from "../lib/remember";
 import { queries } from "../lib/queries";
 import { undecided } from "../lib/eventual";
 import { hiddenEventual, isEventual, prescriptionTitle, usePrescriptions } from "../lib/prescriptions";
@@ -27,8 +28,12 @@ export function TodayPage() {
   // continua como estava (ex.: na semana passada, filtrada por uma pessoa).
   const [params, setParams] = useSearchParams();
   const day = parseDay(params.get("dia")) ?? startOfDay(new Date());
-  const view: AgendaView = params.get("visao") === "semana" ? "week" : params.get("visao") === "mes" ? "month" : "day";
-  const personId = params.get("pessoa");
+  // Sem visão ou pessoa no endereço (ao abrir o app), vale a última escolha guardada.
+  const saved = recall(family.id, "hoje");
+  const visao = params.get("visao") ?? saved.visao;
+  const view: AgendaView = visao === "semana" ? "week" : visao === "mes" ? "month" : "day";
+  const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
+  const personId = resolvePerson(params.get("pessoa") ?? saved.pessoa, persons.data, me?.id);
   // Mudança ainda não aplicada ao endereço: dois toques ou arrastes seguidos
   // partem do resultado do anterior, não do que estava na tela.
   const pending = useRef<URLSearchParams | null>(null);
@@ -37,8 +42,12 @@ export function TodayPage() {
     const next = new URLSearchParams(pending.current ?? params);
     const set = (key: string, value: string | null) => (value ? next.set(key, value) : next.delete(key));
     if (patch.day) set("dia", sameDay(patch.day, new Date()) ? null : dayKey(patch.day));
-    if (patch.view) set("visao", patch.view === "week" ? "semana" : patch.view === "month" ? "mes" : null);
-    if (patch.personId !== undefined) set("pessoa", patch.personId);
+    if (patch.view) set("visao", patch.view === "week" ? "semana" : patch.view === "month" ? "mes" : "dia");
+    if (patch.personId !== undefined) set("pessoa", patch.personId ?? ALL);
+    remember(family.id, "hoje", {
+      ...(patch.view ? { visao: next.get("visao")! } : {}),
+      ...(patch.personId !== undefined ? { pessoa: patch.personId ?? ALL } : {}),
+    });
     pending.current = next;
     setParams(next, { replace: true });
   };
@@ -46,7 +55,8 @@ export function TodayPage() {
   const step = (by: 1 | -1) => {
     const current = pending.current ?? params;
     const from = parseDay(current.get("dia")) ?? startOfDay(new Date());
-    const v: AgendaView = current.get("visao") === "semana" ? "week" : current.get("visao") === "mes" ? "month" : "day";
+    const cv = current.get("visao") ?? recall(family.id, "hoje").visao;
+    const v: AgendaView = cv === "semana" ? "week" : cv === "mes" ? "month" : "day";
     update({ day: move(from, v, by) });
   };
   // Arrastar para o lado muda de dia (ou de semana, ou de mês).
@@ -68,7 +78,6 @@ export function TodayPage() {
 
   const agendaQuery = queries.agenda(family.id, day);
   const agenda = useCached(agendaQuery.key, agendaQuery.fetch);
-  const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
   const treatmentConflicts = useCached(`treatment-conflicts:${family.id}`, () =>
     api<TreatmentConflictView[]>(`/families/${family.id}/treatments/conflicts`));
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));

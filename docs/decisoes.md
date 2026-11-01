@@ -68,6 +68,23 @@ inclusive a das telas que ainda não foram abertas.
 - **O que exige conexão** continua igual: criar convite, exportar dados e
   enviar o aviso de teste.
 
+## Última escolha de cada tela
+
+Cada tela abre como foi deixada: pessoa e visão (Hoje), pessoa e período
+(Saúde), situação (Tratamentos), pessoa, medicamento, período e responsável
+(Histórico), e a pessoa (e o tipo de aferição) nos formulários de novo
+tratamento, aferição e sintoma. A escolha fica guardada neste aparelho, por
+família (`frontend/src/lib/remember.ts`), e vale também ao reabrir o app.
+
+- **"Todos" é a primeira opção, mas não o padrão.** Se foi a última escolha,
+  continua; sem escolha guardada, a tela abre na pessoa de quem usa o app
+  (marcada como "sou eu") ou na primeira pessoa.
+- Escolha que não existe mais (pessoa desativada, medicamento removido) volta
+  para o padrão da tela.
+- O dia escolhido em Hoje não é guardado: ao reabrir, o app mostra hoje.
+- O pré-carregamento usa as mesmas escolhas, para a tela achar a cópia sem
+  conexão.
+
 ## Gravação offline em todo o app
 
 Regra do produto: **toda gravação é feita primeiro no aparelho, aparece na

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { localDateTime, newUser, run } from "./helpers";
 
-test("saúde: com mais de uma pessoa abre em Todos, agrupado por pessoa", async ({ browser }) => {
+test("saúde: \"Todos\" agrupa por pessoa; a tela abre na última escolha, não em Todos", async ({ browser }) => {
   const ana = await newUser(browser, `Ana ST ${run}`);
   const p = ana.page;
   await p.getByLabel("Nome da família").fill(`Família ST ${run}`);
@@ -13,9 +13,14 @@ test("saúde: com mais de uma pessoa abre em Todos, agrupado por pessoa", async 
     await expect(p.getByLabel("Nome", { exact: true })).toHaveValue("");
   }
 
-  // Aferição do Gabriel e sintoma da Lia, cadastrados a partir de "Todos".
+  // Sem escolha guardada, abre na primeira pessoa; "Todos" é a primeira opção, mas não a padrão.
   await p.getByRole("link", { name: "Saúde" }).click();
-  await expect(p.getByRole("button", { name: "Todos" })).toHaveClass(/chip-on/);
+  const chips = p.getByRole("group", { name: "Pessoa" }).getByRole("button");
+  await expect(chips.first()).toHaveText("Todos");
+  await expect(p.getByRole("button", { name: "Gabriel" })).toHaveClass(/chip-on/);
+  await expect(p.getByRole("button", { name: "Todos" })).not.toHaveClass(/chip-on/);
+  // Aferição do Gabriel e sintoma da Lia, cadastrados a partir de "Todos".
+  await p.getByRole("button", { name: "Todos" }).click();
   await p.getByRole("link", { name: "+ Aferição" }).click();
   await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByRole("radio", { name: "Temperatura" }).click();
@@ -34,6 +39,21 @@ test("saúde: com mais de uma pessoa abre em Todos, agrupado por pessoa", async 
   await expect(gabriel).toContainText("Temperatura: 38,1 °C");
   await expect(lia).toContainText("Manchas na pele");
   await expect(gabriel).not.toContainText("Manchas na pele");
+
+  // Ao voltar para a tela (e ao reabrir o app), continua em "Todos": a última escolha.
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await p.getByRole("link", { name: "Saúde" }).click();
+  await expect(p.getByRole("button", { name: "Todos" })).toHaveClass(/chip-on/);
+  await p.goto("/saude");
+  await expect(p.getByRole("button", { name: "Todos" })).toHaveClass(/chip-on/);
+
+  // Hoje também guarda a escolha: Lia continua escolhida depois de reabrir.
+  await p.goto("/");
+  await expect(p.getByRole("button", { name: "Gabriel", exact: true })).toHaveClass(/chip-on/);
+  await p.getByRole("button", { name: "Lia", exact: true }).click();
+  await p.goto("/");
+  await expect(p.getByRole("button", { name: "Lia", exact: true })).toHaveClass(/chip-on/);
+  await p.getByRole("link", { name: "Saúde" }).click();
 
   // Abrir uma pessoa mostra os gráficos dela.
   await gabriel.getByRole("button", { name: "Ver gráficos e linha do tempo de Gabriel →" }).click();

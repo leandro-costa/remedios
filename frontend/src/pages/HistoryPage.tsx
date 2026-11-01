@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import type { MemberView, PersonView } from "../api/types";
@@ -7,9 +6,10 @@ import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
-import { queries } from "../lib/queries";
+import { HISTORY_DEFAULT_DAYS, queries } from "../lib/queries";
+import { ALL, resolvePerson, useRemembered } from "../lib/remember";
 import { formatTime, formatWhen } from "../lib/time";
-import { useFamily } from "../session";
+import { useFamily, useSession } from "../session";
 import { useMedications } from "./MedicationsPage";
 import { doseLabel } from "../lib/labels";
 
@@ -22,14 +22,21 @@ const PERIODS = [
 /** Histórico de registros (seção 7.4). */
 export function HistoryPage() {
   const family = useFamily();
-  const [personId, setPersonId] = useState("");
-  const [medicationId, setMedicationId] = useState("");
-  const [recordedBy, setRecordedBy] = useState("");
-  const [days, setDays] = useState(7);
+  const { me } = useSession();
+  // Cada filtro abre com a última escolha; a pessoa, sem escolha guardada, é quem usa o app (ou a primeira).
+  const [savedPerson, setSavedPerson] = useRemembered(family.id, "historico", "pessoa", "");
+  const [savedMedication, setMedicationId] = useRemembered(family.id, "historico", "medicamento", "");
+  const [savedRecordedBy, setRecordedBy] = useRemembered(family.id, "historico", "responsavel", "");
+  const [daysText, setDaysText] = useRemembered(family.id, "historico", "dias", String(HISTORY_DEFAULT_DAYS));
+  const days = PERIODS.some((p) => p.days === Number(daysText)) ? Number(daysText) : HISTORY_DEFAULT_DAYS;
 
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
+  const personId = resolvePerson(savedPerson || undefined, persons.data, me?.id) ?? "";
   const medications = useMedications();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
+  // Escolha guardada que não existe mais (medicamento ou responsável removido): volta para "Todos".
+  const medicationId = !medications.data || medications.data.some((m) => m.id === savedMedication) ? savedMedication : "";
+  const recordedBy = !members.data || members.data.some((m) => m.userId === savedRecordedBy) ? savedRecordedBy : "";
   // Por medicamento, não por tratamento: as doses do mesmo medicamento em
   // receitas diferentes (ou no uso eventual) aparecem juntas.
   const query = queries.history(family.id, days, personId, medicationId, recordedBy);
@@ -41,7 +48,7 @@ export function HistoryPage() {
       <div className="filters">
         <label>
           Pessoa
-          <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
+          <select value={personId} onChange={(e) => setSavedPerson(e.target.value || ALL)}>
             <option value="">Todas</option>
             {(persons.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
           </select>
@@ -56,7 +63,7 @@ export function HistoryPage() {
         </label>
         <label>
           Período
-          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          <select value={days} onChange={(e) => setDaysText(e.target.value)}>
             {PERIODS.map((p) => <option key={p.days} value={p.days}>{p.label}</option>)}
           </select>
         </label>

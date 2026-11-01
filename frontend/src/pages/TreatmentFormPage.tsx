@@ -11,6 +11,7 @@ import { ScreenBar } from "../components/ScreenBar";
 import { Notice, Spinner } from "../components/Layout";
 import { ScheduleEditor } from "../components/ScheduleEditor";
 import { useCached } from "../hooks/useCached";
+import { recall, remember } from "../lib/remember";
 import { useOnline } from "../hooks/useOnline";
 import { TREATMENT_KIND } from "../lib/labels";
 import { describeSchedule, dosesInDays, emptyScheduleForm, formFromRule, planCourse, ruleFromForm, slotsBetween, validateScheduleForm, type ScheduleForm } from "../lib/schedule";
@@ -81,7 +82,8 @@ export function TreatmentFormPage() {
   // A versão guardada no aparelho serve de base também sem conexão.
   const stored = useCached(id ? `treatment:${id}` : null, () => api<TreatmentView>(`/families/${family.id}/treatments/${id}`));
   const [current, setCurrent] = useState<TreatmentView | null>(null);
-  const [form, setForm] = useState<Form>(emptyForm);
+  // Novo tratamento: começa na última pessoa escolhida aqui.
+  const [form, setForm] = useState<Form>(() => ({ ...emptyForm(), personId: id ? "" : recall(family.id, "tratamento").pessoa ?? "" }));
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,8 +116,15 @@ export function TreatmentFormPage() {
     }
   }, [eventualChosen, form.kind]);
   useEffect(() => {
-    if (fixedPrescription && !form.personId) setForm((f) => ({ ...f, personId: fixedPrescription.personId }));
+    // Receita fixa (?receita=): a pessoa é a dela, mesmo que outra tenha sido a última escolhida.
+    if (fixedPrescription && form.personId !== fixedPrescription.personId) setForm((f) => ({ ...f, personId: fixedPrescription.personId }));
   }, [fixedPrescription, form.personId]);
+  // Pessoa guardada que não existe mais (desativada ou excluída): volta para "Escolha…".
+  useEffect(() => {
+    if (!editing && form.personId && persons.data && !persons.data.some((p) => p.id === form.personId)) {
+      setForm((f) => ({ ...f, personId: "" }));
+    }
+  }, [editing, form.personId, persons.data]);
   const openPrescriptions = (prescriptions.data ?? []).filter((p) => p.personId === form.personId && p.id !== p.personId
     && prescriptionStatus((allTreatments.data ?? []).filter((t) => t.prescriptionId === p.id)) !== "ENDED");
 
@@ -383,7 +392,11 @@ export function TreatmentFormPage() {
       {!editing && !fixedPrescription && (
         <label>
           Pessoa
-          <select value={form.personId} onChange={(e) => { set({ personId: e.target.value }); setPrescriptionId(""); }} required>
+          <select value={form.personId} onChange={(e) => {
+            set({ personId: e.target.value });
+            setPrescriptionId("");
+            remember(family.id, "tratamento", { pessoa: e.target.value });
+          }} required>
             <option value="">Escolha…</option>
             {(persons.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
           </select>

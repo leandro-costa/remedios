@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import type { PersonView, TreatmentProgressView, TreatmentStatus, TreatmentView } from "../api/types";
@@ -13,6 +12,7 @@ import { describeSchedule } from "../lib/schedule";
 import { useFamily, useSession } from "../session";
 import { hiddenEventual, prescriptionStatus, prescriptionTitle, PRESCRIPTION_STATUS, usePrescriptions } from "../lib/prescriptions";
 import { formatDate } from "../lib/time";
+import { useRemembered } from "../lib/remember";
 
 // Ativos primeiro e como padrão: encerrados e rascunhos ficam a um toque.
 const FILTERS: { value: TreatmentStatus | "ALL"; label: string }[] = [
@@ -27,7 +27,8 @@ const FILTERS: { value: TreatmentStatus | "ALL"; label: string }[] = [
 export function TreatmentsPage() {
   const family = useFamily();
   const { me } = useSession();
-  const [filter, setFilter] = useState<TreatmentStatus | "ALL">("ACTIVE");
+  const [savedFilter, setFilter] = useRemembered(family.id, "tratamentos", "situacao", "ACTIVE");
+  const filter = (FILTERS.some((f) => f.value === savedFilter) ? savedFilter : "ACTIVE") as TreatmentStatus | "ALL";
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
   const progress = useCached(`treatment-progress:${family.id}`, () =>
