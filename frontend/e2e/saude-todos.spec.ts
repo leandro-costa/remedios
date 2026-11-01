@@ -17,14 +17,14 @@ test("saúde: com mais de uma pessoa abre em Todos, agrupado por pessoa", async 
   await p.getByRole("link", { name: "Saúde" }).click();
   await expect(p.getByRole("button", { name: "Todos" })).toHaveClass(/chip-on/);
   await p.getByRole("link", { name: "+ Aferição" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByRole("radio", { name: "Temperatura" }).click();
   await p.locator("input.value-input").first().fill("38,1");
   await p.getByLabel("Horário da medida").fill(localDateTime(-30));
   await p.getByRole("button", { name: "Salvar aferição" }).click();
   await p.getByRole("button", { name: "Todos" }).click();
   await p.getByRole("link", { name: "+ Sintoma" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Lia" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Lia" });
   await p.getByRole("button", { name: "Manchas na pele" }).click();
   await p.getByRole("button", { name: "Salvar sintoma" }).click();
   await p.getByRole("button", { name: "Todos" }).click();

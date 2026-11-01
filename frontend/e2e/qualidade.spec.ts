@@ -54,7 +54,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
   await audit(p, "Novo tratamento", problems);
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Medicamento A");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
   await p.getByLabel("Horário 1", { exact: true }).fill(T_MINUS_60);

@@ -354,7 +354,7 @@ export function TreatmentFormPage() {
         {current?.status === "ACTIVE" && !asNeeded && (
           <Notice>Se a agenda, o início ou o término mudaram, as doses futuras ainda não registradas serão recalculadas. Doses passadas e registros não mudam.</Notice>
         )}
-        <div className="row">
+        <div className="form-actions">
           <button className="btn btn-primary" disabled={busy || (askPast && !pastDoses)} onClick={() => void save()}>Salvar</button>
           <button className="btn" onClick={() => setReviewing(false)}>Voltar e editar</button>
         </div>
@@ -545,7 +545,7 @@ export function TreatmentFormPage() {
           </label>
         </>
       )}
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary">Conferir</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>

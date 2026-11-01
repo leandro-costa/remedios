@@ -41,7 +41,7 @@ test("estou cuidando da dose, notificações e lembretes avulsos", async ({ brow
   // Tratamento com dose daqui a 1 hora
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Xarope");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
   await p.getByLabel("Horário 1", { exact: true }).fill(T_PLUS_60);

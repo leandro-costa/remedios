@@ -13,7 +13,7 @@ test("mudar o início de um tratamento ativo reavalia as doses", async ({ browse
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Antialérgico");
   await p.getByLabel("Dose conforme a prescrição").fill("1 comprimido");
   await p.getByLabel("Horário 1", { exact: true }).fill(H);

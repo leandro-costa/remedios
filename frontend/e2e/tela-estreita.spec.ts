@@ -18,7 +18,7 @@ test("tela estreita: botões dentro dos cartões e sem rolagem lateral", async (
 
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Terezinha" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Terezinha" });
   await p.getByLabel("Medicamento").fill("Vitamina D3 colecalciferol");
   await p.getByLabel("Dose conforme a prescrição").fill("10 gotas");
   await p.getByLabel("Horário 1", { exact: true }).fill(localTime(-20));

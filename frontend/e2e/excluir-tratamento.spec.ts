@@ -11,7 +11,7 @@ test("excluir tratamento cadastrado por engano, mesmo encerrado: some de tudo", 
   await p.getByRole("button", { name: "Adicionar pessoa" }).click();
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Engano");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
   await p.getByLabel("Horário 1", { exact: true }).fill(localTime(60));

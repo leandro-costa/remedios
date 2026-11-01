@@ -200,13 +200,13 @@ export function PrescriptionPage() {
         )}
       </section>
 
-      <div className="row wrap">
+      <div className="actions">
         {!eventual && <Link className="btn" to={`/receitas/${p.id}/editar`}>Editar dados</Link>}
         {actions.map((a) => (
           <button key={a.to} className="btn" disabled={busy} onClick={() => { setPending(a); setDeleting(false); }}>{a.label}</button>
         ))}
         {!eventual && family.myRole === "ADMIN" && (
-          <button className="btn" disabled={busy} onClick={() => { setDeleting(true); setPending(null); }}>Excluir (cadastrada por engano)</button>
+          <button className="btn btn-danger" disabled={busy} onClick={() => { setDeleting(true); setPending(null); }}>Excluir (cadastrada por engano)</button>
         )}
       </div>
       {(pending || deleting) && (
@@ -230,7 +230,7 @@ export function PrescriptionPage() {
               ))}
             </fieldset>
           )}
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || (deleting && !reason.trim())}
               onClick={() => void (pending ? change(pending) : remove())}>{pending ? "Confirmar" : "Excluir receita"}</button>
             <button className="btn" onClick={() => { setPending(null); setDeleting(false); }}>Cancelar</button>

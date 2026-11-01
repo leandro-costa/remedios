@@ -22,7 +22,7 @@ test("uso eventual: item oculto enquanto a receita tem o mesmo remédio e pergun
   // Uso eventual: só "se necessário".
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Incluir em").selectOption({ label: 'Uso eventual (sem receita, "se necessário")' });
   await expect(p.getByRole("combobox", { name: /Tipo de tratamento/ })).toHaveValue("AS_NEEDED");
   await expect(p.getByRole("combobox", { name: /Tipo de tratamento/ }).locator("option")).toHaveCount(1);
@@ -41,7 +41,7 @@ test("uso eventual: item oculto enquanto a receita tem o mesmo remédio e pergun
 
   // Receita com o mesmo medicamento e outro "se necessário".
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByText("Dados da receita (título, quem prescreveu, data)").click();
   await p.getByLabel(/Título da receita/).fill("Gripe");
   await p.getByLabel("Medicamento").fill("Parace");

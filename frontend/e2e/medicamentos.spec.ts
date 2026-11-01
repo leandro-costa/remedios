@@ -13,7 +13,7 @@ test("medicamento cadastrado uma vez, com sugestões da ANVISA, reaproveitado em
   // Primeiro tratamento: o nome sugere do catálogo da ANVISA e preenche a substância.
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   const catalog = p.getByRole("group", { name: "Sugestões do catálogo da ANVISA" });
   await expect(async () => {
     await p.getByLabel("Medicamento").fill("");
@@ -40,7 +40,7 @@ test("medicamento cadastrado uma vez, com sugestões da ANVISA, reaproveitado em
 
   // Segundo tratamento: escolhe o mesmo medicamento, sem cadastrar de novo.
   await p.goto("/tratamentos/novo");
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Tyl");
   await p.getByRole("group", { name: "Medicamentos da família" }).getByRole("button", { name: /Tylenol/ }).click();
   await expect(p.getByTestId("medication-summary")).toContainText("paracetamol 750 mg");

@@ -141,7 +141,7 @@ export function TreatmentDetailPage() {
       {progress && !asNeeded && <Progress p={progress} />}
 
       {!t.conflictId && t.status !== "ENDED" && (
-        <div className="row wrap">
+        <div className="actions">
           <Link className="btn" to={`/tratamentos/${t.id}/editar`}>Editar</Link>
           {actions.map((a) => (
             <button key={a.to} className={`btn ${a.primary ? "btn-primary" : ""}`} disabled={busy} onClick={() => setPending(a)}>{a.label}</button>
@@ -181,7 +181,7 @@ export function TreatmentDetailPage() {
               </label>
             </fieldset>
           )}
-          <div className="row">
+          <div className="form-actions">
             <button className="btn btn-primary" disabled={busy || (askPast && !past)} onClick={() => void change(pending)}>Confirmar</button>
             <button className="btn" onClick={() => { setPending(null); setPast(null); }}>Cancelar</button>
           </div>
@@ -267,8 +267,8 @@ function DeleteTreatment({ treatment: t }: { treatment: TreatmentView }) {
 
   if (!open) {
     return (
-      <div className="row">
-        <button className="btn" onClick={() => setOpen(true)}>Excluir (cadastrado por engano)</button>
+      <div className="actions">
+        <button className="btn btn-danger" onClick={() => setOpen(true)}>Excluir (cadastrado por engano)</button>
       </div>
     );
   }
@@ -286,7 +286,7 @@ function DeleteTreatment({ treatment: t }: { treatment: TreatmentView }) {
         <input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000}
           placeholder="Ex.: cadastrado na pessoa errada" />
       </label>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={() => void remove()}>Excluir tratamento</button>
         <button className="btn" onClick={() => setOpen(false)}>Cancelar</button>
       </div>

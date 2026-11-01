@@ -13,7 +13,7 @@ test("se necessário: sem horários, registra cada dose, mostra a última e as d
   // Cadastro: sem agenda e sem término por doses.
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Paracetamol");
   await p.getByLabel("Dose conforme a prescrição").fill("15 gotas");
   await p.getByRole("combobox", { name: /Tipo de tratamento/ }).selectOption("AS_NEEDED");

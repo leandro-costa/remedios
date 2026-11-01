@@ -112,7 +112,7 @@ export function SymptomFormPage() {
         Observações <span className="muted small">(opcional)</span>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} rows={2} />
       </label>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !personId || !description.trim()}>Salvar sintoma</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>

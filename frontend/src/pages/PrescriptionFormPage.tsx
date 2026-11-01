@@ -54,7 +54,7 @@ export function PrescriptionFormPage() {
       <ScreenBar title="Dados da receita" />
       {error && <Notice tone="error">{error}</Notice>}
       <PrescriptionFields value={form} onChange={setForm} />
-      <div className="row">
+      <div className="form-actions">
         <button className="btn btn-primary" disabled={busy}>Salvar</button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>Cancelar</button>
       </div>
