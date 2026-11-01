@@ -234,9 +234,9 @@ export function TodayPage() {
           const nowOk = canRecordNow(o, !!pending);
           const quick = onTimeOk || nowOk;
           return (
-            <li key={o.id} className="dose-row">
+            <li key={o.id} className={`dose-row ${quick ? "has-quick" : ""}`}>
               <Link to={`/doses/${o.id}`} state={{ occurrence: o }}
-                className={`dose ${o.late && !pending ? "dose-late" : ""} ${quick ? "dose-has-quick" : ""}`}>
+                className={`dose ${o.late && !pending ? "dose-late" : ""}`}>
                 <span className="dose-time">{formatTime(o.scheduledAt)}</span>
                 <span className="dose-main">
                   <strong>{o.treatment.name}</strong>
