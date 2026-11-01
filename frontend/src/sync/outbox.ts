@@ -121,7 +121,20 @@ export async function submitReport(report: NewReport): Promise<SubmitResult> {
     attempts: 0,
     state: "pending",
   };
+  // Quem registrou não recebe aviso da própria ação: o lembrete desta dose
+  // some daqui mesmo (o servidor avisa só os outros responsáveis).
+  void closeNotifications(`dose-${report.occurrenceId}`);
   return enqueue(item);
+}
+
+/** Fecha os avisos já mostrados neste aparelho com esta tag (ex.: o lembrete de uma dose). */
+export async function closeNotifications(tag: string) {
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    for (const n of (await registration?.getNotifications({ tag })) ?? []) n.close();
+  } catch {
+    // sem service worker ou sem permissão: nada a fechar
+  }
 }
 
 export interface NewRecord {
