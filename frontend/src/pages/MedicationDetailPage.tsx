@@ -43,7 +43,7 @@ export function MedicationDetailPage() {
         {m.manufacturer && (<><dt>Fabricante</dt><dd>{m.manufacturer}</dd></>)}
         {m.notes && (<><dt>Observações</dt><dd className="pre">{m.notes}</dd></>)}
       </dl>
-      <div className="row">
+      <div className="actions">
         <Link className="btn" to={`/medicamentos/${m.id}/editar`}>Editar</Link>
       </div>
 

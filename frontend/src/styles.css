@@ -138,6 +138,15 @@ a { color: var(--primary); }
 .plain li:last-child { border-bottom: 0; }
 
 .stack { display: flex; flex-direction: column; gap: 0.75rem; }
+/* Lista dentro de uma seção empilhada: o espaço vem do gap da seção, não da margem dos cartões. */
+.stack > h2 { margin-bottom: 0; }
+.stack > .cards { display: flex; flex-direction: column; gap: 0.6rem; }
+.stack > .cards .item { margin: 0; }
+/* Ações da tela (editar, suspender, encerrar…): bloco separado do conteúdo, botões do mesmo tamanho. */
+.actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.6rem; margin: 1.5rem 0 0.75rem; }
+.actions + .actions { margin-top: 0; }
+.actions .btn-danger { grid-column: 1 / -1; }
+.btn.btn-danger { color: var(--error); }
 .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .row.wrap, .wrap { flex-wrap: wrap; }
 .row.between, .between { justify-content: space-between; }

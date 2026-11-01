@@ -141,7 +141,7 @@ export function TreatmentDetailPage() {
       {progress && !asNeeded && <Progress p={progress} />}
 
       {!t.conflictId && t.status !== "ENDED" && (
-        <div className="row wrap">
+        <div className="actions">
           <Link className="btn" to={`/tratamentos/${t.id}/editar`}>Editar</Link>
           {actions.map((a) => (
             <button key={a.to} className={`btn ${a.primary ? "btn-primary" : ""}`} disabled={busy} onClick={() => setPending(a)}>{a.label}</button>
@@ -267,8 +267,8 @@ function DeleteTreatment({ treatment: t }: { treatment: TreatmentView }) {
 
   if (!open) {
     return (
-      <div className="row">
-        <button className="btn" onClick={() => setOpen(true)}>Excluir (cadastrado por engano)</button>
+      <div className="actions">
+        <button className="btn btn-danger" onClick={() => setOpen(true)}>Excluir (cadastrado por engano)</button>
       </div>
     );
   }
