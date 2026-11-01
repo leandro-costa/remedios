@@ -13,7 +13,7 @@ test("histórico por medicamento: receita e uso eventual do mesmo remédio apare
   // Receita com horário (30 min atrás): a dose de hoje já foi dada.
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Dipirona gotas");
   await p.getByLabel("Substância 1").fill("dipirona monoidratada");
   await p.getByLabel("Dose conforme a prescrição").fill("20 gotas");
@@ -25,7 +25,7 @@ test("histórico por medicamento: receita e uso eventual do mesmo remédio apare
 
   // Uso eventual com o mesmo medicamento, escolhido entre os já cadastrados.
   await p.goto("/tratamentos/novo");
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Dipi");
   await p.getByRole("group", { name: "Medicamentos da família" }).getByRole("button", { name: /Dipirona gotas/ }).click();
   await p.getByRole("combobox", { name: /Tipo de tratamento/ }).selectOption("AS_NEEDED");

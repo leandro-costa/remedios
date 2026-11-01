@@ -13,7 +13,7 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
 
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByLabel("Medicamento").fill("Xarope E");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
   await p.getByLabel("Horário 1", { exact: true }).fill(T_PLUS_60);
