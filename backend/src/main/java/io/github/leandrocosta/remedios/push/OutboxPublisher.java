@@ -140,7 +140,9 @@ public class OutboxPublisher {
         List<Notice> notices = new ArrayList<>();
         for (UUID user : members) {
             boolean other = !user.equals(actor);
-            boolean wasReminded = reminded.contains(user);
+            // Quem registrou não recebe aviso da própria ação (o aparelho dele fecha o lembrete);
+            // os outros que receberam o lembrete têm o aviso substituído, mesmo sem pedir confirmação.
+            boolean wasReminded = other && reminded.contains(user);
             UserNotificationSettings pref = prefs.get(user);
             switch (e.eventType) {
                 case "DOSE_ADMINISTERED" -> {

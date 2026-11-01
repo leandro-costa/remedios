@@ -129,10 +129,8 @@ class NotificationTest {
         assertEquals(true, replaced.get("silent"), "confirmação de rotina não toca por padrão");
         assertTrue(((String) replaced.get("body")).startsWith("Ana registrou"));
 
-        // Quem registrou também tinha o lembrete: ele é substituído em silêncio nos aparelhos dela.
-        Map<String, Object> own = anaPhone.take().getFirst();
-        assertEquals("dose-" + dose, own.get("tag"));
-        assertEquals(true, own.get("silent"));
+        // Quem registrou não recebe aviso da própria ação (o aparelho dela fecha o lembrete).
+        assertEquals(0, anaPhone.take().size());
 
         reminders.tick(at.plus(15, ChronoUnit.MINUTES));
         assertEquals(0, brunoPhone.take().size());

@@ -157,7 +157,10 @@ sintomas funcionavam assim.
   acumulados.
 - **Substituição em vez de cancelamento:** o Web Push não permite apagar um
   aviso remotamente sem mostrar outro, então o lembrete é trocado por "Dose
-  registrada" com a mesma `tag`, em silêncio.
+  registrada" com a mesma `tag`, em silêncio, nos aparelhos dos outros
+  responsáveis. **Quem registrou nunca recebe aviso da própria ação:** o
+  aparelho em que registrou fecha o lembrete daquela dose na hora. Nos outros
+  aparelhos dessa mesma pessoa, o lembrete fica até ser dispensado.
 - **Privacidade por padrão:** avisos sem pessoa nem medicamento, a menos que o
   responsável ligue "Mostrar pessoa e medicamento no aviso".
 - **Limite de repetições padrão: 4** (decisão em aberto 5, mantida como
