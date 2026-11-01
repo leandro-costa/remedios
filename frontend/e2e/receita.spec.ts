@@ -13,7 +13,7 @@ test("receita com vários remédios: itens, situação calculada e encerrar tudo
   // Primeiro remédio: cria a receita com título e médico.
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Gabriel" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Gabriel" });
   await p.getByText("Dados da receita (título, quem prescreveu, data)").click();
   await p.getByLabel(/Título da receita/).fill("Infecção de garganta");
   await p.getByLabel(/Quem prescreveu/).fill("Dra. Lima");

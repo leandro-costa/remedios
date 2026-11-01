@@ -25,7 +25,7 @@ test("cadastros offline aparecem na hora e sincronizam ao voltar a conexão", as
   // Ainda offline: tratamento para a pessoa recém-cadastrada, começando ontem
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await p.getByRole("link", { name: "Novo tratamento" }).click();
-  await p.getByLabel("Pessoa").selectOption({ label: "Lia" });
+  await p.getByRole("combobox", { name: "Pessoa" }).selectOption({ label: "Lia" });
   await p.getByLabel("Medicamento").fill("Antibiótico");
   await p.getByLabel("Dose conforme a prescrição").fill("5 ml");
   await p.getByLabel("Primeira dose (data e hora)").fill(YESTERDAY);

@@ -10,6 +10,8 @@ import { MeasurementChart } from "../components/MeasurementChart";
 import { SyncStatus } from "../components/SyncStatus";
 import { isPending } from "../db/cache";
 import { useCached } from "../hooks/useCached";
+import { HEALTH_DEFAULT_HOURS } from "../lib/queries";
+import { ALL, recall, remember, resolvePerson, useRemembered } from "../lib/remember";
 import { useHealth, type MeasurementItem, type SymptomItem } from "../hooks/useHealth";
 import { formatMeasurement, formatNumber, INTENSITY, MEASUREMENT_TYPES, methodLabel, parseNumber, referenceFor, TYPE_ORDER } from "../lib/health";
 import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
@@ -30,11 +32,19 @@ export function HealthPage() {
   const [params, setParams] = useSearchParams();
   const persons = useCached(`persons:${family.id}`, () =>
     api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
-  // Com mais de uma pessoa, a tela abre em "Todos", agrupada por pessoa (como Tratamentos).
+  // "Todos" (agrupado por pessoa) só com mais de uma pessoa. Sem pessoa no
+  // endereço, vale a última escolha guardada; sem escolha, quem usa o app.
   const several = (persons.data?.length ?? 0) > 1;
-  const personId = params.get("pessoa") ?? (several ? null : persons.data?.[0]?.id ?? null);
+  const chosenPerson = resolvePerson(params.get("pessoa") ?? recall(family.id, "saude").pessoa, persons.data, me?.id);
+  const personId = chosenPerson ?? (several ? null : persons.data?.[0]?.id ?? null);
   const all = several && !personId;
-  const [hours, setHours] = useState(24);
+  const choosePerson = (id: string | null) => {
+    remember(family.id, "saude", { pessoa: id ?? ALL });
+    setParams({ pessoa: id ?? ALL });
+  };
+  const [hoursText, setHoursText] = useRemembered(family.id, "saude", "horas", String(HEALTH_DEFAULT_HOURS));
+  const hours = PERIODS.some((p) => p.hours === Number(hoursText)) ? Number(hoursText) : HEALTH_DEFAULT_HOURS;
+  const setHours = (h: number) => setHoursText(String(h));
   // Período fixado ao escolher (a chave do cache não muda a cada render).
   const [anchor, setAnchor] = useState(() => Date.now());
   const { from, to } = useMemo(() => ({ from: new Date(anchor - hours * 3_600_000), to: new Date(anchor + 60_000) }), [anchor, hours]);
@@ -58,9 +68,9 @@ export function HealthPage() {
       <SyncStatus familyId={family.id} fresh={health.fresh} savedAt={health.savedAt} />
 
       <div className="chips" role="group" aria-label="Pessoa">
-        {several && <button className={`chip ${all ? "chip-on" : ""}`} onClick={() => setParams({})}>Todos</button>}
+        {several && <button className={`chip ${all ? "chip-on" : ""}`} onClick={() => choosePerson(null)}>Todos</button>}
         {(persons.data ?? []).map((p) => (
-          <button key={p.id} className={`chip ${p.id === personId ? "chip-on" : ""}`} onClick={() => setParams({ pessoa: p.id })}>
+          <button key={p.id} className={`chip ${p.id === personId ? "chip-on" : ""}`} onClick={() => choosePerson(p.id)}>
             {p.userId && p.userId === me?.id ? "Você" : p.displayName}
           </button>
         ))}
@@ -80,7 +90,7 @@ export function HealthPage() {
 
       {all && (persons.data ?? []).map((p) => (
         <PersonSummary key={p.id} person={p} name={p.userId && p.userId === me?.id ? "Você" : p.displayName}
-          hours={hours} anchor={anchor} onOpen={() => setParams({ pessoa: p.id })} />
+          hours={hours} anchor={anchor} onOpen={() => choosePerson(p.id)} />
       ))}
       {/* Uma pessoa: gráficos, lembretes e linha do tempo. */}
       {!all && (

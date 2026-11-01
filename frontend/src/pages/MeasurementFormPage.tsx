@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
+import { defaultPerson, recall, remember } from "../lib/remember";
 import { MEASUREMENT_TYPES, parseNumber, TYPE_ORDER } from "../lib/health";
 import { fromLocalInput, toLocalInput } from "../lib/time";
 import { useFamily, useSession } from "../session";
@@ -13,15 +14,21 @@ import { discard, pendingFor, submitRecord } from "../sync/outbox";
 /** Registro de aferição; funciona offline (fila). */
 export function MeasurementFormPage() {
   const family = useFamily();
-  const { deviceId } = useSession();
+  const { deviceId, me } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [chosen, setChosen] = useState(params.get("pessoa") ?? "");
+  // Pessoa: a da tela de origem (?pessoa=), senão a última escolhida aqui.
+  const [chosen, setChosenState] = useState(params.get("pessoa") ?? recall(family.id, "afericao").pessoa ?? "");
+  const setChosen = (id: string) => { setChosenState(id); remember(family.id, "afericao", { pessoa: id }); };
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
-  const personId = chosen || persons.data?.[0]?.id || "";
+  const personId = (chosen && (!persons.data || persons.data.some((p) => p.id === chosen)) ? chosen : null)
+    ?? defaultPerson(persons.data, me?.id) ?? "";
   const person = persons.data?.find((p) => p.id === personId);
 
-  const [type, setType] = useState<MeasurementType>((params.get("tipo") as MeasurementType) ?? "TEMPERATURE");
+  const [type, setTypeState] = useState<MeasurementType>(
+    () => [params.get("tipo"), recall(family.id, "afericao").tipo]
+      .find((t): t is MeasurementType => Boolean(t && t in MEASUREMENT_TYPES)) ?? "TEMPERATURE");
+  const setType = (t: MeasurementType) => { setTypeState(t); remember(family.id, "afericao", { tipo: t }); };
   const [value, setValue] = useState("");
   const [value2, setValue2] = useState("");
   const [label, setLabel] = useState("");

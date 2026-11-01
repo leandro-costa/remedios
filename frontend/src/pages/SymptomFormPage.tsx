@@ -5,6 +5,7 @@ import type { Intensity, PersonView, TreatmentView } from "../api/types";
 import { ScreenBar } from "../components/ScreenBar";
 import { Notice } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
+import { defaultPerson, recall, remember } from "../lib/remember";
 import { INTENSITY, SYMPTOM_SUGGESTIONS } from "../lib/health";
 import { fromLocalInput, toLocalInput } from "../lib/time";
 import { useFamily, useSession } from "../session";
@@ -13,13 +14,16 @@ import { discard, pendingFor, submitRecord } from "../sync/outbox";
 /** Registro de sintoma ou possível reação; funciona offline (fila). */
 export function SymptomFormPage() {
   const family = useFamily();
-  const { deviceId } = useSession();
+  const { deviceId, me } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [chosen, setChosen] = useState(params.get("pessoa") ?? "");
+  // Pessoa: a da tela de origem (?pessoa=), senão a última escolhida aqui.
+  const [chosen, setChosenState] = useState(params.get("pessoa") ?? recall(family.id, "sintoma").pessoa ?? "");
+  const setChosen = (id: string) => { setChosenState(id); remember(family.id, "sintoma", { pessoa: id }); };
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
   const treatments = useCached(`treatments:${family.id}`, () => api<TreatmentView[]>(`/families/${family.id}/treatments`));
-  const personId = chosen || persons.data?.[0]?.id || "";
+  const personId = (chosen && (!persons.data || persons.data.some((p) => p.id === chosen)) ? chosen : null)
+    ?? defaultPerson(persons.data, me?.id) ?? "";
   const person = persons.data?.find((p) => p.id === personId);
 
   const [description, setDescription] = useState("");

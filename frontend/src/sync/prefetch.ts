@@ -2,6 +2,7 @@ import type { FamilyView, PersonView, TreatmentView } from "../api/types";
 import { cached } from "../db/cache";
 import { db } from "../db/db";
 import { HEALTH_DEFAULT_HOURS, HISTORY_DEFAULT_DAYS, queries, type Query } from "../lib/queries";
+import { recall, resolvePerson } from "../lib/remember";
 import { startOfDay } from "../lib/time";
 import { flush } from "./outbox";
 
@@ -93,7 +94,6 @@ async function run(family: FamilyView, userId: string | null) {
     get(queries.settings(f)),
     get(queries.referenceLines(f)),
     get(queries.agenda(f, startOfDay(new Date()))),
-    get(queries.history(f, HISTORY_DEFAULT_DAYS)),
     get(queries.recipients(f)),
     get(queries.devices()),
     ...(userId ? [get(queries.notificationPrefs(userId))] : []),
@@ -105,11 +105,20 @@ async function run(family: FamilyView, userId: string | null) {
   await db.cache.bulkPut((treatments ?? []).map((t) => ({ key: queries.treatment(f, t.id).key, value: t, savedAt })));
 
   const now = Date.now();
+  // Histórico e Saúde com a última escolha de cada tela (pessoa, período…),
+  // a mesma chave que a tela vai procurar sem conexão.
+  const hist = recall(f, "historico");
+  const days = Number(hist.dias) || HISTORY_DEFAULT_DAYS;
+  const histPerson = resolvePerson(hist.pessoa || undefined, persons, userId ?? undefined) ?? "";
+  const hours = [...new Set([HEALTH_DEFAULT_HOURS, Number(recall(f, "saude").horas) || HEALTH_DEFAULT_HOURS])];
   const more: Query<unknown>[] = [
+    queries.history(f, days, histPerson, hist.medicamento ?? "", hist.responsavel ?? ""),
     ...(persons ?? []).flatMap((p) => [
-      queries.measurements(f, p.id, HEALTH_DEFAULT_HOURS, now),
-      queries.symptoms(f, p.id, HEALTH_DEFAULT_HOURS, now),
-      queries.healthDoses(f, p.id, HEALTH_DEFAULT_HOURS, now),
+      ...hours.flatMap((h) => [
+        queries.measurements(f, p.id, h, now),
+        queries.symptoms(f, p.id, h, now),
+        queries.healthDoses(f, p.id, h, now),
+      ]),
       queries.reminders(f, p.id),
     ]),
     ...(treatments ?? []).filter((t) => t.status !== "ENDED").flatMap((t) => [
