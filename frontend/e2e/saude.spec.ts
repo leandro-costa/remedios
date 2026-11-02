@@ -35,7 +35,7 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await p.getByRole("button", { name: "Salvar" }).click();
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
   await p.getByRole("link", { name: new RegExp(T_MINUS_75) }).click();
   await p.getByLabel("Horário efetivo").fill(localDateTime(-70));
   await p.getByRole("button", { name: "Confirmar administração" }).click();

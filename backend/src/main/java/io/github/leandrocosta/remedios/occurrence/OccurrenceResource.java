@@ -43,6 +43,9 @@ public class OccurrenceResource {
             @NotBlank @Size(max = 1000) String reason) {
     }
 
+    public record Exclude(@NotNull Long baseVersion, @NotBlank @Size(max = 1000) String reason) {
+    }
+
     public record Correct(
             @NotNull Long baseVersion,
             @NotNull OccurrenceService.CorrectionTarget status,
@@ -96,6 +99,14 @@ public class OccurrenceResource {
         NotAdministered n = r == null ? new NotAdministered(null, null, null, null, null) : r;
         return views.of(List.of(occurrences.markNotAdministered(familyId, occurrenceId, n.reason(), n.deviceId(),
                 new OccurrenceService.Operation(n.operationId(), n.baseVersion(), n.recordedAt())))).getFirst();
+    }
+
+    /** Exclui uma dose gerada ou registrada por engano (só administradores; motivo obrigatório). */
+    @POST
+    @Path("/occurrences/{occurrenceId}/exclusion")
+    public OccurrenceView exclude(@PathParam("familyId") UUID familyId,
+            @PathParam("occurrenceId") UUID occurrenceId, @Valid @NotNull Exclude r) {
+        return views.of(List.of(occurrences.exclude(familyId, occurrenceId, r.baseVersion(), r.reason()))).getFirst();
     }
 
     @POST

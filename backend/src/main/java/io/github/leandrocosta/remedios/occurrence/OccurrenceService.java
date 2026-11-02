@@ -6,6 +6,7 @@ import io.github.leandrocosta.remedios.common.ClientIds;
 import io.github.leandrocosta.remedios.common.Texts;
 import io.github.leandrocosta.remedios.common.VersionConflictException;
 import io.github.leandrocosta.remedios.family.FamilyAccess;
+import io.github.leandrocosta.remedios.schedule.ScheduleService;
 import io.github.leandrocosta.remedios.sync.SyncConflict;
 import io.github.leandrocosta.remedios.sync.SyncConflictChange;
 import io.github.leandrocosta.remedios.sync.SyncOperation;
@@ -39,6 +40,9 @@ public class OccurrenceService {
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
     private static final Duration MAX_RANGE = Duration.ofDays(62);
     static final int MAX_HISTORY = 500;
+    private final ScheduleService schedules;
+    /** Doses de um tratamento na tela dele: um tratamento contínuo de anos cabe com folga. */
+    static final int MAX_TREATMENT_DOSES = 3000;
 
     /** {@code CANCELLED}: dose "se necessário" registrada por engano. */
     public enum CorrectionTarget { ADMINISTERED, NOT_ADMINISTERED, OPEN, CANCELLED }
@@ -57,7 +61,8 @@ public class OccurrenceService {
 
     public OccurrenceService(CurrentUser currentUser, FamilyAccess access, DeviceService devices, AuditService audit,
             EntityManager em, @ConfigProperty(name = "remedios.administration.max-advance") Duration maxAdvance,
-            @ConfigProperty(name = "remedios.reminders.claim") Duration claimDuration) {
+            @ConfigProperty(name = "remedios.reminders.claim") Duration claimDuration, ScheduleService schedules) {
+        this.schedules = schedules;
         this.claimDuration = claimDuration;
         this.currentUser = currentUser;
         this.access = access;
@@ -94,6 +99,57 @@ public class OccurrenceService {
                 List.of(DoseOccurrence.Status.ADMINISTERED, DoseOccurrence.Status.NOT_ADMINISTERED,
                         DoseOccurrence.Status.REVIEW_REQUIRED),
                 "o.scheduledAt desc, o.slotKey desc", Math.clamp(limit, 1, MAX_HISTORY));
+    }
+
+    /** Todas as doses de um tratamento (dadas, não dadas, em aberto, excluídas), em ordem de horário. */
+    public List<DoseOccurrence> ofTreatment(UUID familyId, UUID treatmentId) {
+        access.requireMember(familyId);
+        Treatment.<Treatment>find("id = ?1 and familyId = ?2 and deletedAt is null", treatmentId, familyId)
+                .firstResultOptional().orElseThrow(() -> ApiException.notFound("Tratamento"));
+        return query(familyId, Instant.EPOCH, Instant.parse("9999-01-01T00:00:00Z"), null, treatmentId, null, null,
+                null, "o.scheduledAt, o.slotKey", MAX_TREATMENT_DOSES);
+    }
+
+    /**
+     * Exclui uma dose gerada ou registrada por engano (só administradores): ela
+     * deixa de aparecer e de contar no andamento. Nada é apagado: o registro de
+     * administração, se havia, é invalidado e preservado, e tudo fica na
+     * auditoria com o motivo. Num tratamento por número de doses, a dose
+     * excluída não conta no total (como as canceladas), então a agenda segue
+     * até completar o total da receita.
+     */
+    @Transactional
+    public DoseOccurrence exclude(UUID familyId, UUID occurrenceId, long baseVersion, String rawReason) {
+        access.requireAdmin(familyId);
+        String reason = Texts.clean(rawReason);
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.unprocessable("REASON_REQUIRED", "Informe o motivo da exclusão.");
+        }
+        DoseOccurrence o = DoseOccurrence.lockInFamily(familyId, occurrenceId)
+                .orElseThrow(() -> ApiException.notFound("Dose"));
+        if (o.version != baseVersion) {
+            throw new VersionConflictException("A dose", o.version);
+        }
+        if (o.status == DoseOccurrence.Status.CANCELLED) {
+            throw ApiException.conflict("ALREADY_EXCLUDED", "Esta dose já foi excluída ou cancelada.");
+        }
+        if (o.status == DoseOccurrence.Status.REVIEW_REQUIRED) {
+            throw ApiException.conflict("REVIEW_REQUIRED", "Esta dose aguarda a conferência de registros divergentes.");
+        }
+        Instant now = Instant.now();
+        AdministrationRecord previous = AdministrationRecord.findValid(o.id).orElse(null);
+        Map<String, Object> before = previous == null ? stateData(o) : recordData(o, previous);
+        if (previous != null) {
+            previous.voidedAt = now;
+            previous.voidedBy = currentUser.id();
+            previous.voidReason = reason;
+        }
+        close(o, DoseOccurrence.Status.CANCELLED, reason, now);
+        audit.record(familyId, currentUser.id(), ENTITY, o.id, "DOSE_EXCLUDED", before, stateData(o), reason);
+        // Por número de doses: a excluída não conta, e a agenda completa o total da receita.
+        em.flush();
+        schedules.refill(Treatment.findById(o.treatmentId));
+        return o;
     }
 
     public DoseOccurrence get(UUID familyId, UUID occurrenceId) {

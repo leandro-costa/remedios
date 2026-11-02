@@ -5,6 +5,7 @@ import type { PastDoses, RevisionView, TreatmentProgressView, TreatmentStatus, T
 import { AsNeededCard } from "../components/AsNeeded";
 import { Icon } from "../components/Icon";
 import { ScreenBar } from "../components/ScreenBar";
+import { TreatmentDoses } from "../components/TreatmentDoses";
 import { Notice, Spinner } from "../components/Layout";
 import { useCached } from "../hooks/useCached";
 import { TREATMENT_KIND, TREATMENT_STATUS } from "../lib/labels";
@@ -139,6 +140,7 @@ export function TreatmentDetailPage() {
 
       {asNeeded && t.status !== "DRAFT" && <AsNeededCard treatment={t} />}
       {progress && !asNeeded && <Progress p={progress} />}
+      {!asNeeded && t.status !== "DRAFT" && <TreatmentDoses treatment={t} />}
 
       {!t.conflictId && t.status !== "ENDED" && (
         <div className="actions">

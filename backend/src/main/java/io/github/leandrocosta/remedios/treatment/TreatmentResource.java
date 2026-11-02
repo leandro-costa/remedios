@@ -186,6 +186,14 @@ public class TreatmentResource {
         return Response.noContent().build();
     }
 
+    /** Todas as doses do tratamento, da primeira à última gerada (tela do tratamento). */
+    @GET
+    @Path("/{treatmentId}/occurrences")
+    public List<OccurrenceViews.OccurrenceView> occurrences(@PathParam("familyId") UUID familyId,
+            @PathParam("treatmentId") UUID treatmentId) {
+        return occurrenceViews.of(occurrences.ofTreatment(familyId, treatmentId));
+    }
+
     @POST
     @Path("/{treatmentId}/doses")
     public OccurrenceViews.OccurrenceView recordDose(@PathParam("familyId") UUID familyId,
