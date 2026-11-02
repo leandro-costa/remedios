@@ -303,6 +303,13 @@ São parâmetros operacionais, não orientação clínica.
   registrados e o aparelho guarda uma cópia (cerca de 12 mil itens, 180 KB
   compactados), para sugerir nome, substâncias e fabricante ao digitar,
   inclusive offline. Só sugere: o que fica salvo é o que a pessoa confirmou.
+- **Excluir uma dose gerada ou registrada por engano** (tela do tratamento,
+  só administradores, com motivo): a dose fica cancelada, deixa de aparecer em
+  Hoje e de contar no andamento; o registro de administração, se havia, é
+  invalidado e preservado. Num tratamento por número de doses, a excluída não
+  conta no total (como as canceladas) e a agenda gera em seguida a dose que
+  completa o total da receita. Não é "dose perdida": essa continua contando e
+  não é reposta.
 - **Excluir tratamento cadastrado por engano** é ocultar, não apagar
   (`treatment.deleted_at`, `deleted_by`, `delete_reason`, V11). Só
   administradores, com motivo, em qualquer situação (inclusive encerrado). O

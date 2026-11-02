@@ -26,6 +26,9 @@ export const queries = {
   members: (f: string) => q(`members:${f}`, () => api<MemberView[]>(`/families/${f}/members`)),
   treatments: (f: string) => q(`treatments:${f}`, () => api<TreatmentView[]>(`/families/${f}/treatments`)),
   treatment: (f: string, id: string) => q(`treatment:${id}`, () => api<TreatmentView>(`/families/${f}/treatments/${id}`)),
+  /** Todas as doses do tratamento, da primeira à última gerada. */
+  treatmentDoses: (f: string, id: string) =>
+    q(`treatment-doses:${id}`, () => api<OccurrenceView[]>(`/families/${f}/treatments/${id}/occurrences`)),
   revisions: (f: string, id: string) => q(`revisions:${id}`, () => api<RevisionView[]>(`/families/${f}/treatments/${id}/revisions`)),
   treatmentProgress: (f: string) => q(`treatment-progress:${f}`, () => api<TreatmentProgressView[]>(`/families/${f}/treatments/progress`)),
   treatmentConflicts: (f: string) => q(`treatment-conflicts:${f}`, () => api<TreatmentConflictView[]>(`/families/${f}/treatments/conflicts`)),

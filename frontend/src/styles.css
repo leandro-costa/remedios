@@ -266,6 +266,9 @@ legend { font-weight: 600; margin-bottom: 0.5rem; }
 .dose-late { border-color: var(--late); }
 /* "Dada no horário" fica fora do link da dose (botão não pode ficar dentro de link). */
 .dose-row { position: relative; }
+/* Dose na tela do tratamento: o link ocupa a linha; "Excluir" ao lado, fora do link. */
+.treatment-dose { display: flex; align-items: center; gap: 0.5rem; }
+.treatment-dose > .item { flex: 1; min-width: 0; margin: 0; }
 /* Com atalhos, o cartão é o item da lista: a dose (link) em cima e os botões abaixo, no fluxo. */
 .dose-row.has-quick {
   margin: 0.6rem 0; background: var(--surface); border: 1.5px solid transparent; border-radius: 18px; box-shadow: var(--shadow);

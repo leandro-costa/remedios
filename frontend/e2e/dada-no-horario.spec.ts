@@ -30,7 +30,7 @@ test("dada no horário: um toque na tela Hoje, com confirmação, online e offli
   await p.getByRole("button", { name: "Salvar" }).click();
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
 
   // Cartão "Próxima dose": pede confirmação com pessoa, medicamento, dose e horário.
   const first = p.getByRole("link", { name: new RegExp(T_MINUS_90) });

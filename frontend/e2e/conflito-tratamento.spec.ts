@@ -66,7 +66,7 @@ test("dois aparelhos offline alteram o mesmo tratamento: a segunda alteração v
   await expect(b.getByRole("link", { name: "Editar" })).toHaveCount(0);
 
   // A Ana confere e aplica a alteração do Bruno, com motivo
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
   await p.getByRole("link", { name: /1 alteração de tratamento precisa de conferência/ }).click();
   await expect(p.getByRole("heading", { name: "Xarope" })).toBeVisible();
   await expect(p.getByText("Dose: 7 ml → 10 ml")).toBeVisible();
