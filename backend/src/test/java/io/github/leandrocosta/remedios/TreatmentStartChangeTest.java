@@ -153,4 +153,52 @@ class TreatmentStartChangeTest {
         assertEquals("ADMINISTERED", doses.get(day(-1)));
         assertEquals("ADMINISTERED", doses.get(day(0)));
     }
+
+    @Test
+    void intervalScheduleFirstDoseThirtyMinutesEarlierSameDayCreatesTheDose() {
+        // "A cada 12 horas, a partir de X", 4 doses: três já dadas e uma futura.
+        Instant first = d.now.minus(25, ChronoUnit.HOURS);
+        String id = createInterval(first, 4);
+        for (Instant at : List.of(first, first.plus(12, ChronoUnit.HOURS), first.plus(24, ChronoUnit.HOURS))) {
+            d.ana.req().body(Map.of("deviceId", d.anaDevice.toString()))
+                    .post("/api/families/{f}/occurrences/{o}/administration", d.family, d.occurrenceAt(at))
+                    .then().statusCode(200);
+        }
+
+        // A primeira dose foi meia hora antes (mesmo dia): a série passa a começar nela, e ela foi dada.
+        Instant earlier = first.minus(30, ChronoUnit.MINUTES);
+        Map<String, Object> body = intervalBody(earlier, 4);
+        body.put("baseVersion", 2);
+        body.put("effectiveFrom", Instant.now().toString());
+        body.put("pastDoses", "ADMINISTERED");
+        body.put("deviceId", d.anaDevice.toString());
+        d.ana.req().body(body).put("/api/families/{f}/treatments/{t}", d.family, id).then().statusCode(200);
+
+        Map<Instant, String> doses = doses();
+        assertEquals("ADMINISTERED", doses.get(earlier), doses.toString());
+        // Registros feitos continuam; o total (4) se mantém: a futura sem registro sai.
+        assertEquals(List.of(earlier, first, first.plus(12, ChronoUnit.HOURS), first.plus(24, ChronoUnit.HOURS)),
+                List.copyOf(doses.keySet()), doses.toString());
+    }
+
+    private Map<String, Object> intervalBody(Instant start, int doseCount) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", "Antibiótico");
+        body.put("kind", "OCCASIONAL");
+        body.put("prescribedDose", "1 comprimido");
+        body.put("startAt", start.toString());
+        body.put("doseCount", doseCount);
+        body.put("schedule", Map.of("type", "INTERVAL", "timezone", "UTC", "everyHours", 12,
+                "firstDoseAt", start.atOffset(java.time.ZoneOffset.UTC).toLocalTime().truncatedTo(ChronoUnit.MINUTES).toString()));
+        return body;
+    }
+
+    private String createInterval(Instant start, int doseCount) {
+        Map<String, Object> body = intervalBody(start, doseCount);
+        body.put("personId", d.person);
+        String id = d.ana.req().body(body).post("/api/families/{f}/treatments", d.family)
+                .then().statusCode(201).extract().path("id");
+        d.activate(id, 1, start);
+        return id;
+    }
 }
