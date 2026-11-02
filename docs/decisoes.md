@@ -265,7 +265,9 @@ São parâmetros operacionais, não orientação clínica.
   aberto antes do novo início são canceladas; antecipado, as do período
   acrescentado (até 30 dias, numa versão de agenda já encerrada) são criadas,
   e o responsável diz se já foram dadas, como na ativação. Doses registradas
-  nunca mudam.
+  nunca mudam. Por número de doses, as antecipadas entram sempre (mesmo com o total
+  já completo) e saem as últimas doses sem registro depois do início antigo,
+  mantendo o total; se todas já foram registradas, o total fica acima.
 - **Medicamento é um cadastro da família** (V12), reaproveitado entre
   tratamentos, com substâncias e concentração do rótulo, forma e fabricante.
   Os tratamentos que já existiam ganharam um medicamento por nome. Sem

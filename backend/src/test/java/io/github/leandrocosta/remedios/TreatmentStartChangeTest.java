@@ -115,4 +115,42 @@ class TreatmentStartChangeTest {
         // Antecipado um dia: a de anteontem entra e a de amanhã sai.
         assertEquals(List.of(day(-2), day(-1), day(0)), List.copyOf(doses().keySet()));
     }
+
+    @Test
+    void earlierStartWithDoseCountWhenAllDosesArePastDropsTheLastOpenOne() {
+        // 3 doses, todas já no passado: anteontem (dada), ontem (dada) e hoje (sem registro).
+        String id = createActive(day(-2).minus(1, ChronoUnit.HOURS), 3);
+        for (Instant at : List.of(day(-2), day(-1))) {
+            d.ana.req().body(Map.of("deviceId", d.anaDevice.toString()))
+                    .post("/api/families/{f}/occurrences/{o}/administration", d.family, d.occurrenceAt(at))
+                    .then().statusCode(200);
+        }
+        assertEquals(List.of(day(-2), day(-1), day(0)), List.copyOf(doses().keySet()));
+
+        // A primeira dose foi, na verdade, um dia antes (e foi dada).
+        changeStart(id, day(-3).minus(1, ChronoUnit.HOURS), 3, "ADMINISTERED");
+
+        // Entra a dose antecipada (como dada); sai a última sem registro; o total continua 3.
+        Map<Instant, String> doses = doses();
+        assertEquals(List.of(day(-3), day(-2), day(-1)), List.copyOf(doses.keySet()), doses.toString());
+        assertEquals("ADMINISTERED", doses.get(day(-3)));
+        assertEquals("ADMINISTERED", doses.get(day(-2)));
+    }
+
+    @Test
+    void earlierStartWithDoseCountWhenAllDosesAreRecordedStillAddsTheEarlierDose() {
+        // 2 doses, ambas dadas: o início antecipado não apaga registros; a dose antecipada entra mesmo assim.
+        String id = createActive(day(-1).minus(1, ChronoUnit.HOURS), 2);
+        for (Instant at : List.of(day(-1), day(0))) {
+            d.ana.req().body(Map.of("deviceId", d.anaDevice.toString()))
+                    .post("/api/families/{f}/occurrences/{o}/administration", d.family, d.occurrenceAt(at))
+                    .then().statusCode(200);
+        }
+        changeStart(id, day(-2).minus(1, ChronoUnit.HOURS), 2, "OPEN");
+
+        Map<Instant, String> doses = doses();
+        assertEquals(List.of(day(-2), day(-1), day(0)), List.copyOf(doses.keySet()), doses.toString());
+        assertEquals("ADMINISTERED", doses.get(day(-1)));
+        assertEquals("ADMINISTERED", doses.get(day(0)));
+    }
 }

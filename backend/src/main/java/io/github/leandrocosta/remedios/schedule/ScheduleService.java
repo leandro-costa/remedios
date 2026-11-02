@@ -73,8 +73,47 @@ public class ScheduleService {
     @Transactional(Transactional.TxType.MANDATORY)
     public TreatmentSchedule backfill(Treatment treatment, Instant from, Instant to) {
         TreatmentSchedule s = newVersion(treatment, from, to);
-        generate(s, treatment, to);
+        // As doses do período antecipado vêm primeiro: entram mesmo que o total já
+        // esteja completo (o excesso sai do fim, em trimToDoseCount), até o total.
+        generate(s, treatment, to, treatment.doseCount == null ? Long.MAX_VALUE : treatment.doseCount);
         return s;
+    }
+
+    /**
+     * Término por número de doses: se o total passou (o início foi antecipado),
+     * cancela as últimas doses sem registro a partir de {@code from}. Registros
+     * feitos nunca mudam; se não houver doses sem registro, o total fica acima.
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public int trimToDoseCount(Treatment t, Instant from, UUID actor, String reason) {
+        if (t.doseCount == null) {
+            return 0;
+        }
+        long excess = countPlanned(t) - t.doseCount;
+        if (excess <= 0) {
+            return 0;
+        }
+        List<DoseOccurrence> open = em.createQuery("""
+                from DoseOccurrence o where o.treatmentId = :t and o.scheduledAt >= :from and o.status in :open
+                 order by o.scheduledAt desc
+                """, DoseOccurrence.class)
+                .setParameter("t", t.id)
+                .setParameter("from", from)
+                .setParameter("open", List.of(DoseOccurrence.Status.SCHEDULED, DoseOccurrence.Status.PENDING))
+                .setMaxResults((int) excess)
+                .getResultList();
+        Instant now = Instant.now();
+        for (DoseOccurrence o : open) {
+            o.status = DoseOccurrence.Status.CANCELLED;
+            o.statusReason = reason;
+            o.statusChangedBy = actor;
+            o.statusChangedAt = now;
+            o.claimedBy = null;
+            o.claimedUntil = null;
+            o.updatedAt = now;
+            o.version++;
+        }
+        return open.size();
     }
 
     private TreatmentSchedule newVersion(Treatment treatment, Instant validFrom, Instant validUntil) {
@@ -172,6 +211,11 @@ public class ScheduleService {
     /** Gera as doses de {@code s} ainda não geradas, até {@code until}. */
     @Transactional(Transactional.TxType.MANDATORY)
     public int generate(TreatmentSchedule s, Treatment t, Instant until) {
+        return generate(s, t, until, t.doseCount == null ? Long.MAX_VALUE : t.doseCount - countPlanned(t));
+    }
+
+    /** Gera até {@code remaining} doses de {@code s} ainda não geradas, até {@code until}. */
+    private int generate(TreatmentSchedule s, Treatment t, Instant until, long remaining) {
         Instant from = max(max(s.validFrom, t.startAt), s.generatedUntil);
         Instant to = min(min(until, s.validUntil), t.endAt);
         if (!from.isBefore(to)) {
@@ -180,7 +224,6 @@ public class ScheduleService {
         List<OccurrenceSlots.Slot> slots = OccurrenceSlots.between(fromStored(s.rule), t.startAt, from, to);
         // Término por número de doses: só até completar o total. Canceladas não
         // contam; dadas, não dadas e em aberto contam (dose perdida não é reposta).
-        long remaining = t.doseCount == null ? Long.MAX_VALUE : t.doseCount - countPlanned(t);
         Instant now = Instant.now();
         int created = 0;
         for (OccurrenceSlots.Slot slot : slots) {
