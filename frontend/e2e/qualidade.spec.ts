@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { activate, localTime, newUser, run, shot } from "./helpers";
+import { activate, localTime, newUser, run, shot, goToday } from "./helpers";
 
 /** Regras WCAG 2.1 níveis A e AA, mais as da 2.2 AA (ex.: tamanho dos alvos de toque). */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -72,7 +72,7 @@ test("acessibilidade (WCAG 2.2 AA), política de conteúdo e cabeçalhos de segu
   await audit(p, "Tratamentos", problems);
   await shot(p, "q-tratamentos");
 
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.getByRole("link", { name: new RegExp(T_MINUS_60) })).toBeVisible();
   await audit(p, "Hoje", problems);
   await p.locator(".next-dose").getByRole("button", { name: /Dada no horário/ }).click();

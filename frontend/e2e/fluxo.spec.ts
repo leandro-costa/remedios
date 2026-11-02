@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { goOffline, goOnline, localTime, newUser, run, shot } from "./helpers";
+import { goOffline, goOnline, localTime, newUser, run, shot, goToday } from "./helpers";
 
 test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => {
   // Horários fixados no início: evita a virada de minuto durante o teste.
@@ -41,7 +41,7 @@ test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => 
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
   // Registro online da dose de 1 h atrás
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   const first = p.getByRole("link", { name: new RegExp(T_MINUS_60) });
   await expect(first).toContainText("Atrasada");
   await shot(p, "1-hoje");
@@ -83,7 +83,7 @@ test("cadastro, registro, offline e dois responsáveis", async ({ browser }) => 
   await shot(b, "4-offline");
 
   // Enquanto Bruno está offline, Ana registra a mesma dose
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await p.getByRole("link", { name: new RegExp(T_PLUS_120) }).click();
   await p.getByRole("button", { name: "Confirmar administração" }).click();
   await expect(p.getByRole("link", { name: new RegExp(T_PLUS_120) })).toContainText("Administrada");

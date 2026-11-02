@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activate, localTime, newUser, run } from "./helpers";
+import { activate, localTime, newUser, run, goToday } from "./helpers";
 
 test("tratamento: lista todas as doses, abre o detalhe e exclui uma gerada por engano", async ({ browser }) => {
   const H = localTime(-60);
@@ -46,7 +46,7 @@ test("tratamento: lista todas as doses, abre o detalhe e exclui uma gerada por e
   await expect(doses.getByRole("button", { name: new RegExp(`Excluir a dose de Hoje · ${H}`) })).toHaveCount(0);
 
   // Some de Hoje.
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.getByRole("link", { name: new RegExp(`${H}.*Amoxicilina`) })).toHaveCount(0);
   await ana.context.close();
 });

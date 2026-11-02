@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { goOffline, goOnline, localDateTime, localTime, newUser, run, shot, activate } from "./helpers";
+import { goOffline, goOnline, localDateTime, localTime, newUser, run, shot, activate, goToday } from "./helpers";
 
 async function measure(p: Page, type: string, values: string[], minutesAgo: number) {
   await p.getByRole("link", { name: "+ Aferição" }).first().click();
@@ -35,7 +35,7 @@ test("aferições com gráfico, referência, offline e sintomas", async ({ brows
   await p.getByRole("button", { name: "Salvar" }).click();
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await p.getByRole("link", { name: new RegExp(T_MINUS_75) }).click();
   await p.getByLabel("Horário efetivo").fill(localDateTime(-70));
   await p.getByRole("button", { name: "Confirmar administração" }).click();

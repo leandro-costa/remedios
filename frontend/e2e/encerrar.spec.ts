@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activate, localTime, newUser, run } from "./helpers";
+import { activate, localTime, newUser, run, goToday } from "./helpers";
 
 test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browser }) => {
   const T_PLUS_60 = localTime(60);
@@ -22,7 +22,7 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.getByRole("link", { name: new RegExp(T_PLUS_60) })).toContainText("Xarope E");
 
   // Encerra: as doses futuras são canceladas e saem do dia.
@@ -34,7 +34,7 @@ test("doses de tratamento encerrado não aparecem na tela Hoje", async ({ browse
   await p.getByRole("button", { name: "Confirmar" }).click();
   await expect(p.getByText("Encerrado", { exact: true })).toBeVisible();
 
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.getByText("Nenhuma dose prevista para hoje.")).toBeVisible();
   await expect(p.getByRole("link", { name: new RegExp(T_PLUS_60) })).toHaveCount(0);
 

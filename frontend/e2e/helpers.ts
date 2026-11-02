@@ -56,3 +56,9 @@ export async function activate(page: Page, past: RegExp = /Não sei ou nem todas
   if (await option.isVisible()) await option.check();
   await page.getByRole("button", { name: "Confirmar" }).click();
 }
+
+/** Abre a tela Hoje pela navegação e espera ela aparecer (antes disso, a tela anterior ainda está visível). */
+export async function goToday(page: Page) {
+  await page.getByRole("link", { name: "Hoje", exact: true }).click();
+  await page.locator(".page-today").waitFor();
+}

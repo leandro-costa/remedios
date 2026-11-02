@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activate, localTime, run, timezoneId } from "./helpers";
+import { activate, localTime, run, timezoneId, goToday } from "./helpers";
 
 // Celular de 360 px com a fonte do sistema maior: o Chrome amplia a página e
 // sobram cerca de 320 px. Nenhum botão pode vazar do cartão nem a tela rolar para o lado.
@@ -27,7 +27,7 @@ test("tela estreita: botões dentro dos cartões e sem rolagem lateral", async (
   await activate(p);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.locator(".next-dose").getByRole("button", { name: /Dada agora/ })).toBeVisible();
   const problems = await p.evaluate(() => {
     const out: string[] = [];

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activate, localTime, newUser, run } from "./helpers";
+import { activate, localTime, newUser, run, goToday } from "./helpers";
 
 test("histórico por medicamento: receita e uso eventual do mesmo remédio aparecem juntos", async ({ browser }) => {
   const ana = await newUser(browser, `Ana HM ${run}`);
@@ -37,7 +37,7 @@ test("histórico por medicamento: receita e uso eventual do mesmo remédio apare
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
 
   // Cartão do uso eventual: a dose da receita já conta na última dose e nas 24 h.
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   const card = p.getByRole("region", { name: "Se necessário: Dipirona gotas" });
   await expect(card.getByTestId("as-needed-count")).toHaveText("1 dose nas últimas 24 h");
   await card.getByRole("button", { name: "Registrar dose" }).click();
