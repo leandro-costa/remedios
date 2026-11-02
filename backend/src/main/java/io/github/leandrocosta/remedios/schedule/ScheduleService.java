@@ -208,6 +208,34 @@ public class ScheduleService {
         return created;
     }
 
+    /**
+     * Uma dose de um tratamento por número de doses deixou de contar (excluída):
+     * a agenda volta a gerar a partir da última dose que conta, para completar o
+     * total da receita logo em seguida (e não só depois do horizonte).
+     */
+    @Transactional(Transactional.TxType.MANDATORY)
+    public int refill(Treatment t) {
+        if (t.doseCount == null || t.status != Treatment.Status.ACTIVE) {
+            return 0;
+        }
+        TreatmentSchedule s = TreatmentSchedule.<TreatmentSchedule>find("treatmentId = ?1 and validUntil is null", t.id)
+                .firstResult();
+        if (s == null) {
+            return 0;
+        }
+        Instant last = em.createQuery("""
+                select max(o.scheduledAt) from DoseOccurrence o where o.treatmentId = :t and o.status <> :cancelled
+                """, Instant.class)
+                .setParameter("t", t.id)
+                .setParameter("cancelled", DoseOccurrence.Status.CANCELLED)
+                .getSingleResult();
+        if (last != null && s.generatedUntil != null && last.isBefore(s.generatedUntil)) {
+            // Slots entre a última dose e o fim já gerado ficaram de fora porque o total estava completo.
+            s.generatedUntil = max(last.plusMillis(1), s.validFrom);
+        }
+        return generate(s, t, Instant.now().plus(horizon));
+    }
+
     /** Doses do tratamento que contam no total (todas, menos as canceladas). */
     public long countPlanned(Treatment t) {
         return em.createQuery("""

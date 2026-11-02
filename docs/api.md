@@ -343,6 +343,8 @@ Efeitos na agenda:
 | --- | --- | --- |
 | GET | `/api/families/{f}/occurrences?from=&to=&personId=&treatmentId=` | doses previstas no período (máx. 62 dias), em ordem de horário; a tela **Hoje** usa o dia local do aparelho |
 | GET | `/api/families/{f}/occurrences/{o}` | dose + todos os registros (inclusive invalidados) + trilha de auditoria |
+| GET | `/api/families/{f}/treatments/{t}/occurrences` | todas as doses do tratamento (inclusive canceladas e excluídas), em ordem de horário; até 3000 |
+| POST | `/api/families/{f}/occurrences/{o}/exclusion` | `{baseVersion, reason}`: exclui uma dose gerada ou registrada por engano (só administradores). Fica `CANCELLED` com o motivo; o registro de administração, se havia, é invalidado e preservado; auditoria `DOSE_EXCLUDED`. Já excluída/cancelada: `409 ALREADY_EXCLUDED`; em conferência: `409 REVIEW_REQUIRED` |
 | POST | `/api/families/{f}/occurrences/{o}/administration` | `{deviceId, administeredAt?, notes?, operationId?, baseVersion?, recordedAt?}` |
 | POST | `/api/families/{f}/occurrences/{o}/not-administered` | `{reason?, deviceId?, operationId?, baseVersion?, recordedAt?}` |
 | POST | `/api/families/{f}/occurrences/{o}/resolution` | conferência de conflito: `{baseVersion, status, reason, proposalId?, administeredAt?, deviceId?}` |

@@ -123,6 +123,7 @@ async function run(family: FamilyView, userId: string | null) {
     ]),
     ...(treatments ?? []).filter((t) => t.status !== "ENDED").flatMap((t) => [
       queries.revisions(f, t.id),
+      ...(t.kind !== "AS_NEEDED" ? [queries.treatmentDoses(f, t.id)] : []),
       ...(t.kind === "AS_NEEDED" ? [queries.asNeeded(f, t)] : []),
     ]),
     ...(medications ?? []).map((m) => queries.medicationHistory(f, m.id)),

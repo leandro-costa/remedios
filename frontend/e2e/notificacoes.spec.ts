@@ -59,7 +59,7 @@ test("estou cuidando da dose, notificações e lembretes avulsos", async ({ brow
   await b.getByRole("link", { name: new RegExp(T_PLUS_60) }).click();
   await b.getByRole("button", { name: "Estou cuidando desta dose" }).click();
   await expect(b.getByRole("button", { name: /Você está cuidando até/ })).toBeVisible();
-  await p.getByRole("link", { name: "Hoje" }).click();
+  await p.getByRole("link", { name: "Hoje", exact: true }).click();
   await p.getByRole("link", { name: new RegExp(T_PLUS_60) }).click();
   await expect(p.getByText(`Bruno N ${run} está cuidando desta dose`)).toBeVisible();
   await shot(p, "8-cuidando");
