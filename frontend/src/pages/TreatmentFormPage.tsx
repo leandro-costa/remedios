@@ -350,6 +350,12 @@ export function TreatmentFormPage() {
                 : `${gapSlots.length === 1 ? "A dose prevista" : `As ${gapSlots.length} doses previstas`} antes do início antigo já ${gapSlots.length === 1 ? "foi dada" : "foram dadas"}?`}
             </legend>
             {gapFrom > newStart && <p className="muted small">Só entram as doses dos últimos 30 dias.</p>}
+            {form.endMode === "DOSES" || form.endMode === "DAYS" ? (
+              <p className="muted small">
+                O total da receita continua o mesmo: as doses antecipadas entram e saem as últimas ainda sem registro.
+                Registros feitos não mudam.
+              </p>
+            ) : null}
             <label className="radio">
               <input type="radio" name="past" checked={pastDoses === "ADMINISTERED"} onChange={() => setPastDoses("ADMINISTERED")} />
               Sim, foram dadas nos horários previstos (registrar como administradas)

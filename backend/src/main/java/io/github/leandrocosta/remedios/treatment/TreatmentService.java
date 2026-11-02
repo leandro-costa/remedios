@@ -672,6 +672,12 @@ public class TreatmentService {
         Instant gapTo = min(previousStart, change.effectiveFrom());
         TreatmentSchedule gap = gapFrom.isBefore(gapTo) ? schedules.backfill(t, gapFrom, gapTo) : null;
         schedules.start(t, change.effectiveFrom());
+        // Por número de doses: as antecipadas entram e saem as últimas sem registro, mantendo o total.
+        int trimmed = gap == null ? 0 : schedules.trimToDoseCount(t, gapTo, currentUser.id(), "Início antecipado");
+        if (trimmed > 0) {
+            audit.record(t.familyId, currentUser.id(), TREATMENT, t.id, "OCCURRENCES_CANCELLED", null,
+                    Map.of("count", trimmed, "reason", "total de doses"), "Início antecipado");
+        }
         if (gap != null && recordPast) {
             occurrences.recordPastAsAdministered(t.familyId, t.id, gap.id, deviceId, now);
         }
