@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { localDateTime, newUser, run } from "./helpers";
+import { localDateTime, newUser, run, goToday } from "./helpers";
 
 test("saúde: \"Todos\" agrupa por pessoa; a tela abre na última escolha, não em Todos", async ({ browser }) => {
   const ana = await newUser(browser, `Ana ST ${run}`);
@@ -41,7 +41,7 @@ test("saúde: \"Todos\" agrupa por pessoa; a tela abre na última escolha, não 
   await expect(gabriel).not.toContainText("Manchas na pele");
 
   // Ao voltar para a tela (e ao reabrir o app), continua em "Todos": a última escolha.
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await p.getByRole("link", { name: "Saúde" }).click();
   await expect(p.getByRole("button", { name: "Todos" })).toHaveClass(/chip-on/);
   await p.goto("/saude");

@@ -512,10 +512,21 @@ export function TreatmentFormPage() {
           placeholder={asNeeded ? "Ex.: se febre acima de 37,8 °C, no máximo de 6 em 6 horas" : undefined} />
         {asNeeded && <span className="muted small">Aparece ao lado da última dose. O app não calcula quando a próxima pode ser dada.</span>}
       </label>
-      {!asNeeded && <ScheduleEditor value={form.schedule} onChange={(schedule) => set({ schedule })} />}
+      {/* "A cada N horas": a série começa na primeira dose; os dois horários andam juntos. */}
+      {!asNeeded && <ScheduleEditor value={form.schedule} onChange={(schedule) => set(
+        schedule.type === "INTERVAL" && schedule.firstDoseAt
+          && (schedule.firstDoseAt !== form.schedule.firstDoseAt || form.schedule.type !== "INTERVAL")
+          ? { schedule, startAt: `${form.startAt.slice(0, 10)}T${schedule.firstDoseAt}` }
+          : { schedule })} />}
       <label>
         {asNeeded ? "Início (data e hora)" : "Primeira dose (data e hora)"}
-        <input type="datetime-local" value={form.startAt} onChange={(e) => set({ startAt: e.target.value })} required />
+        <input type="datetime-local" value={form.startAt} onChange={(e) => set(
+          form.schedule.type === "INTERVAL" && e.target.value
+            ? { startAt: e.target.value, schedule: { ...form.schedule, firstDoseAt: e.target.value.slice(11, 16) } }
+            : { startAt: e.target.value })} required />
+        {!asNeeded && form.schedule.type === "INTERVAL" && (
+          <span className="muted small">Na agenda "a cada N horas", as doses seguem a partir deste horário.</span>
+        )}
         {!asNeeded && <span className="muted small">Já em andamento? Informe a primeira dose de fato: as anteriores a agora contam no total.</span>}
       </label>
       <fieldset className="stack">

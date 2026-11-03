@@ -268,6 +268,11 @@ São parâmetros operacionais, não orientação clínica.
   nunca mudam. Por número de doses, as antecipadas entram sempre (mesmo com o total
   já completo) e saem as últimas doses sem registro depois do início antigo,
   mantendo o total; se todas já foram registradas, o total fica acima.
+- **"A cada N horas": a série começa na primeira dose.** No formulário, a
+  hora da "Primeira dose" e o "Primeira dose às" da agenda andam juntos.
+  Antes, mudar só o horário da primeira dose (ex.: 07:30 → 07:00, mesmo dia)
+  não mudava a série, que continuava a partir das 07:30, e nenhuma dose era
+  criada no período antecipado.
 - **Medicamento é um cadastro da família** (V12), reaproveitado entre
   tratamentos, com substâncias e concentração do rótulo, forma e fabricante.
   Os tratamentos que já existiam ganharam um medicamento por nome. Sem

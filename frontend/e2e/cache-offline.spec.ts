@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activate, goOffline, goOnline, localDateTime, localTime, newUser, run } from "./helpers";
+import { activate, goOffline, goOnline, localDateTime, localTime, newUser, run, goToday } from "./helpers";
 
 test("sem conexão, todas as telas abrem com a cópia guardada, inclusive as nunca abertas", async ({ browser }) => {
   const ana = await newUser(browser, `Ana CO ${run}`);
@@ -33,7 +33,7 @@ test("sem conexão, todas as telas abrem com a cópia guardada, inclusive as nun
   await expect(p.getByRole("status").filter({ hasText: "Sincronizado" }).first()).toBeVisible();
 
   // Ao reconectar (e ao abrir o app), os dados de todas as telas são guardados em segundo plano.
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await goOffline(ana.context, p);
   await goOnline(ana.context, p);
   await p.waitForLoadState("networkidle");

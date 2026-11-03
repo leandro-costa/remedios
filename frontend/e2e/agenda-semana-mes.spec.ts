@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { activate, localTime, newUser, run } from "./helpers";
+import { activate, localTime, newUser, run, goToday } from "./helpers";
 
 /** Arrasta o dedo na tela Hoje (para a esquerda: avança), `times` vezes seguidas, sem esperar a tela. */
 async function swipe(p: Page, direction: "left" | "right", times = 1) {
@@ -33,7 +33,7 @@ test("agenda: arrastar muda o dia, atalho para hoje, semana e mês", async ({ br
   await p.getByRole("button", { name: "Salvar" }).click();
   await activate(p, /Sim, foi dada no horário previsto/);
   await expect(p.getByText("Ativo", { exact: true })).toBeVisible();
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(p.getByRole("heading", { name: "Hoje" })).toBeVisible();
   await expect(p.getByRole("button", { name: "Voltar para hoje" })).toHaveCount(0);
 

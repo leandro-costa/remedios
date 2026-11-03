@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { newUser, run } from "./helpers";
+import { newUser, run, goToday } from "./helpers";
 
 async function saveAndActivate(p: Page) {
   await p.getByRole("button", { name: "Conferir" }).click();
@@ -57,7 +57,7 @@ test("uso eventual: item oculto enquanto a receita tem o mesmo remédio e pergun
   await saveAndActivate(p);
 
   // Hoje: vale o Paracetamol da receita (15 gotas); o do uso eventual fica oculto.
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   const cards = p.getByRole("region", { name: "Se necessário: Paracetamol gotas" });
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("15 gotas");
@@ -76,7 +76,7 @@ test("uso eventual: item oculto enquanto a receita tem o mesmo remédio e pergun
   await p.getByRole("link", { name: "Tratamentos" }).click();
   await expect(eventual.getByRole("link", { name: /Ibuprofeno/ })).toBeVisible();
   await expect(eventual.getByText(/Oculto enquanto/)).toHaveCount(0);
-  await p.getByRole("link", { name: "Hoje", exact: true }).click();
+  await goToday(p);
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("10 gotas");
   await expect(p.getByRole("region", { name: "Se necessário: Ibuprofeno" })).toBeVisible();
