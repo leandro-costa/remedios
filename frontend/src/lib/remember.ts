@@ -50,6 +50,15 @@ export function defaultPerson(persons: PersonView[] | undefined, meId: string | 
 }
 
 /**
+ * Escolha que a tela mostra: só uma pessoa que está nas opções visíveis.
+ * Se a guardada não está (lista ainda sem carregar, pessoa removida), vale
+ * "Todos": a tela nunca fica filtrando sem nenhuma opção marcada.
+ */
+export function shownPerson(id: string | null, persons: PersonView[] | undefined): string | null {
+  return id && persons?.some((p) => p.id === id) ? id : null;
+}
+
+/**
  * Pessoa escolhida numa tela com "Todos": a guardada (se ainda existe), senão
  * a padrão. null quer dizer "Todos".
  */

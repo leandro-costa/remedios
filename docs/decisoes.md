@@ -68,6 +68,13 @@ inclusive a das telas que ainda não foram abertas.
 - **O que exige conexão** continua igual: criar convite, exportar dados e
   enviar o aviso de teste.
 
+## Atrasadas de outros dias
+
+Na tela Hoje, um botão mostra as doses dos últimos 7 dias que passaram do
+horário sem registro (nem dada, nem não dada), por dia, com o filtro de
+pessoa. Cada uma abre o detalhe para registrar. O app só lista: não sugere
+dar a dose agora nem a repõe.
+
 ## Última escolha de cada tela
 
 Cada tela abre como foi deixada: pessoa e visão (Hoje), pessoa e período
@@ -81,6 +88,8 @@ família (`frontend/src/lib/remember.ts`), e vale também ao reabrir o app.
   (marcada como "sou eu") ou na primeira pessoa.
 - Escolha que não existe mais (pessoa desativada, medicamento removido) volta
   para o padrão da tela.
+- A tela nunca filtra por uma opção que não aparece: se a lista de pessoas
+  ainda não carregou (ou a guardada não está nela), vale "Todos", marcado.
 - O dia escolhido em Hoje não é guardado: ao reabrir, o app mostra hoje.
 - O pré-carregamento usa as mesmas escolhas, para a tela achar a cópia sem
   conexão.

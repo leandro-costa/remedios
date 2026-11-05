@@ -94,6 +94,7 @@ async function run(family: FamilyView, userId: string | null) {
     get(queries.settings(f)),
     get(queries.referenceLines(f)),
     get(queries.agenda(f, startOfDay(new Date()))),
+    get(queries.overdue(f, startOfDay(new Date()))),
     get(queries.recipients(f)),
     get(queries.devices()),
     ...(userId ? [get(queries.notificationPrefs(userId))] : []),
