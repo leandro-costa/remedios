@@ -12,7 +12,8 @@ import { ProgressRing } from "../components/ProgressRing";
 import { StatusBadge } from "../components/StatusBadge";
 import { SyncStatus } from "../components/SyncStatus";
 import { useCached } from "../hooks/useCached";
-import { ALL, recall, remember, resolvePerson } from "../lib/remember";
+import { ALL, recall, remember, resolvePerson, shownPerson } from "../lib/remember";
+import { OverdueDoses } from "../components/OverdueDoses";
 import { queries } from "../lib/queries";
 import { undecided } from "../lib/eventual";
 import { hiddenEventual, isEventual, prescriptionTitle, usePrescriptions } from "../lib/prescriptions";
@@ -33,7 +34,8 @@ export function TodayPage() {
   const visao = params.get("visao") ?? saved.visao;
   const view: AgendaView = visao === "semana" ? "week" : visao === "mes" ? "month" : "day";
   const persons = useCached(`persons:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`, { query: { active: "true" } }));
-  const personId = resolvePerson(params.get("pessoa") ?? saved.pessoa, persons.data, me?.id);
+  // Só uma pessoa que aparece nas opções; senão "Todos" (nunca fica filtrando sem opção marcada).
+  const personId = shownPerson(resolvePerson(params.get("pessoa") ?? saved.pessoa, persons.data, me?.id), persons.data);
   // Mudança ainda não aplicada ao endereço: dois toques ou arrastes seguidos
   // partem do resultado do anterior, não do que estava na tela.
   const pending = useRef<URLSearchParams | null>(null);
@@ -243,6 +245,10 @@ export function TodayPage() {
         <>
       {agenda.error && !agenda.data && <Notice tone="error">{agenda.error}</Notice>}
       {agenda.loading && !agenda.data && <Spinner />}
+      {isToday && (
+        <OverdueDoses personId={personId} queued={new Set(queued.keys())}
+          who={(id, name) => (mine.has(id) ? "Você" : name)} />
+      )}
       {agenda.data && doses.length === 0 && (
         <p className="empty">Nenhuma dose prevista {isToday ? "para hoje" : "neste dia"}.</p>
       )}

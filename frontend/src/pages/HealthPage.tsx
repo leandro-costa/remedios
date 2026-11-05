@@ -11,7 +11,7 @@ import { SyncStatus } from "../components/SyncStatus";
 import { isPending } from "../db/cache";
 import { useCached } from "../hooks/useCached";
 import { HEALTH_DEFAULT_HOURS } from "../lib/queries";
-import { ALL, recall, remember, resolvePerson, useRemembered } from "../lib/remember";
+import { ALL, recall, remember, resolvePerson, shownPerson, useRemembered } from "../lib/remember";
 import { useHealth, type MeasurementItem, type SymptomItem } from "../hooks/useHealth";
 import { formatMeasurement, formatNumber, INTENSITY, MEASUREMENT_TYPES, methodLabel, parseNumber, referenceFor, TYPE_ORDER } from "../lib/health";
 import { formatTime, formatWhen, fromLocalInput, toLocalInput } from "../lib/time";
@@ -35,7 +35,8 @@ export function HealthPage() {
   // "Todos" (agrupado por pessoa) só com mais de uma pessoa. Sem pessoa no
   // endereço, vale a última escolha guardada; sem escolha, quem usa o app.
   const several = (persons.data?.length ?? 0) > 1;
-  const chosenPerson = resolvePerson(params.get("pessoa") ?? recall(family.id, "saude").pessoa, persons.data, me?.id);
+  const chosenPerson = shownPerson(
+    resolvePerson(params.get("pessoa") ?? recall(family.id, "saude").pessoa, persons.data, me?.id), persons.data);
   const personId = chosenPerson ?? (several ? null : persons.data?.[0]?.id ?? null);
   const all = several && !personId;
   const choosePerson = (id: string | null) => {

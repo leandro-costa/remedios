@@ -50,6 +50,12 @@ export const queries = {
       query: { from: addDays(day, -1).toISOString(), to: addDays(day, 3).toISOString() },
     })),
 
+  /** Doses dos últimos 7 dias antes de hoje (a tela filtra as atrasadas sem registro). */
+  overdue: (f: string, today: Date) => q(`overdue:${f}:${today.toISOString()}`, () =>
+    api<OccurrenceView[]>(`/families/${f}/occurrences`, {
+      query: { from: addDays(today, -7).toISOString(), to: today.toISOString() },
+    })),
+
   /** Saúde de uma pessoa nas últimas `hours` horas, até `anchor` (o período escolhido na tela). */
   measurements: (f: string, personId: string, hours: number, anchor: number) =>
     q(`measurements:${f}:${personId}:${hours}h`, () =>

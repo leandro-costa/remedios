@@ -553,3 +553,7 @@ h2.eyebrow { margin: 0; }
   .card { padding: 0.9rem 0.85rem; }
   .segmented button { padding: 0.25rem; line-height: 1.15; }
 }
+
+/* Hoje: atrasadas de outros dias, atrás de um botão. */
+.overdue { margin: 0.6rem 0; }
+.overdue-toggle { width: 100%; border-color: var(--late); color: var(--late); background: var(--late-soft); }
