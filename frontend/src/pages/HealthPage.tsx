@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { api, errorMessage } from "../api/client";
 import type { CustomReminderView, MeasurementType, PersonView, ReferenceLineView } from "../api/types";
 import { Avatar } from "../components/Avatar";
+import { ChipRow } from "../components/ChipRow";
 import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
@@ -68,26 +69,26 @@ export function HealthPage() {
         : all ? "Aferições e sintomas da família" : undefined} />
       <SyncStatus familyId={family.id} fresh={health.fresh} savedAt={health.savedAt} />
 
-      <div className="chips" role="group" aria-label="Pessoa">
+      <ChipRow label="Pessoa">
         {several && <button className={`chip ${all ? "chip-on" : ""}`} onClick={() => choosePerson(null)}>Todos</button>}
         {(persons.data ?? []).map((p) => (
           <button key={p.id} className={`chip ${p.id === personId ? "chip-on" : ""}`} onClick={() => choosePerson(p.id)}>
             {p.userId && p.userId === me?.id ? "Você" : p.displayName}
           </button>
         ))}
-      </div>
+      </ChipRow>
 
       <div className="grid-2">
         <Link className="btn btn-primary" to={personId ? `/saude/aferir?pessoa=${personId}` : "/saude/aferir"}>+ Aferição</Link>
         <Link className="btn" to={personId ? `/saude/sintoma?pessoa=${personId}` : "/saude/sintoma"}>+ Sintoma</Link>
       </div>
 
-      <div className="chips" role="group" aria-label="Período">
+      <ChipRow label="Período">
         {PERIODS.map((p) => (
           <button key={p.hours} className={`chip ${hours === p.hours ? "chip-on" : ""}`}
             onClick={() => { setHours(p.hours); setAnchor(Date.now()); }}>{p.label}</button>
         ))}
-      </div>
+      </ChipRow>
 
       {all && (persons.data ?? []).map((p) => (
         <PersonSummary key={p.id} person={p} name={p.userId && p.userId === me?.id ? "Você" : p.displayName}

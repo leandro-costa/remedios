@@ -6,6 +6,7 @@ import { AgendaRange, move, startOfMonth, startOfWeek, type AgendaView } from ".
 import { AsNeededCard } from "../components/AsNeeded";
 import { Notice, Spinner } from "../components/Layout";
 import { Avatar } from "../components/Avatar";
+import { ChipRow } from "../components/ChipRow";
 import { Icon } from "../components/Icon";
 import { canRecordNow, canRecordOnTime, OnTimeDialog } from "../components/OnTimeDialog";
 import { ProgressRing } from "../components/ProgressRing";
@@ -228,14 +229,14 @@ export function TodayPage() {
         </Notice>
       )}
 
-      <div className="chips" role="group" aria-label="Filtrar por pessoa">
+      <ChipRow label="Filtrar por pessoa">
         <button className={`chip ${personId === null ? "chip-on" : ""}`} onClick={() => update({ personId: null })}>Todos</button>
         {(persons.data ?? []).map((p) => (
           <button key={p.id} className={`chip ${personId === p.id ? "chip-on" : ""}`} onClick={() => update({ personId: p.id })}>
             {p.userId && p.userId === me?.id ? "Você" : p.displayName}
           </button>
         ))}
-      </div>
+      </ChipRow>
 
       {view !== "day" && (
         <AgendaRange view={view} day={day} personId={personId} queued={new Set(queued.keys())} who={who}
