@@ -87,7 +87,7 @@ services:
 
   # Testes de ponta a ponta do PWA contra o serviço web (exige o modo local).
   e2e:
-    image: mcr.microsoft.com/playwright:v1.64.1-resolute
+    image: mcr.microsoft.com/playwright:v1.65.0-resolute
     profiles: ["tools"]
     depends_on:
       - web
