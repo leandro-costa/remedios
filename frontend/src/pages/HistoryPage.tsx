@@ -7,7 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useCached } from "../hooks/useCached";
 import { HISTORY_DEFAULT_DAYS, queries } from "../lib/queries";
-import { ALL, resolvePerson, useRemembered } from "../lib/remember";
+import { ALL, resolvePerson, shownPerson, useRemembered } from "../lib/remember";
 import { formatTime, formatWhen } from "../lib/time";
 import { useFamily, useSession } from "../session";
 import { useMedications } from "./MedicationsPage";
@@ -31,7 +31,7 @@ export function HistoryPage() {
   const days = PERIODS.some((p) => p.days === Number(daysText)) ? Number(daysText) : HISTORY_DEFAULT_DAYS;
 
   const persons = useCached(`persons-all:${family.id}`, () => api<PersonView[]>(`/families/${family.id}/persons`));
-  const personId = resolvePerson(savedPerson || undefined, persons.data, me?.id) ?? "";
+  const personId = shownPerson(resolvePerson(savedPerson || undefined, persons.data, me?.id), persons.data) ?? "";
   const medications = useMedications();
   const members = useCached(`members:${family.id}`, () => api<MemberView[]>(`/families/${family.id}/members`));
   // Escolha guardada que não existe mais (medicamento ou responsável removido): volta para "Todos".

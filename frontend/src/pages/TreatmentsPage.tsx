@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { api } from "../api/client";
 import type { PersonView, TreatmentProgressView, TreatmentStatus, TreatmentView } from "../api/types";
 import { Avatar } from "../components/Avatar";
+import { ChipRow } from "../components/ChipRow";
 import { Icon } from "../components/Icon";
 import { Notice, Spinner } from "../components/Layout";
 import { PageHeader } from "../components/PageHeader";
@@ -93,11 +94,11 @@ export function TreatmentsPage() {
         action={<Link to="/tratamentos/novo" className="round-btn" aria-label="Novo tratamento" title="Novo tratamento"><Icon name="plus" /></Link>} />
       <Link to="/medicamentos" className="link">Medicamentos cadastrados →</Link>
       {!treatments.fresh && <Notice tone="warn">Sem conexão: lista guardada neste aparelho.</Notice>}
-      <div className="chips" role="group" aria-label="Filtrar por situação">
+      <ChipRow label="Filtrar por situação">
         {FILTERS.map((f) => (
           <button key={f.value} className={`chip ${filter === f.value ? "chip-on" : ""}`} onClick={() => setFilter(f.value)}>{f.label}</button>
         ))}
-      </div>
+      </ChipRow>
       {treatments.loading && !treatments.data && <Spinner />}
       {treatments.error && !treatments.data && <Notice tone="error">{treatments.error}</Notice>}
       {treatments.data && groups.length === 0 && <p className="empty">Nenhum tratamento {filter === "ALL" ? "cadastrado" : "nesta situação"}.</p>}
