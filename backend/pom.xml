@@ -16,7 +16,7 @@
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
         <compiler-plugin.version>3.16.0</compiler-plugin.version>
-        <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <surefire-plugin.version>3.6.1</surefire-plugin.version>
         <enforcer-plugin.version>3.6.3</enforcer-plugin.version>
     </properties>
 
