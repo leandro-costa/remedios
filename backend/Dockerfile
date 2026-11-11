@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- Build ------------------------------------------------------------------
-FROM maven:3.10.0-eclipse-temurin-27 AS build
+FROM maven:3-eclipse-temurin-26 AS build
 WORKDIR /src
 COPY pom.xml .
 COPY src src
