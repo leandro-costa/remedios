@@ -103,7 +103,7 @@ services:
       - /src/node_modules
 
   tests:
-    image: maven:3.10.0-eclipse-temurin-27
+    image: maven:3-eclipse-temurin-26
     profiles: ["tools"]
     depends_on:
       postgres:
