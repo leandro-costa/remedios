@@ -2,7 +2,7 @@
 # Contexto de build: raiz do repositório (veja compose.yaml).
 
 # --- Build do PWA -------------------------------------------------------------
-FROM node:26.12.1-alpine AS build
+FROM node:26.13.0-alpine AS build
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
